@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Register for Portal UI - Your gateway to professional web solutions">
+    <meta name="keywords" content="registration, portal, web services">
+    <title>Registration - Portal UI</title>
+    
+    <!-- Stylesheet -->
+    <link rel="stylesheet" href="css/styles.css">
+    
+    <!-- Favicon (placeholder - add your own) -->
+    <link rel="icon" type="image/x-icon" href="images/favicon.ico">
+</head>
+<body>
+    <!-- Header -->
+    <header>
+        <div class="container">
+            <a href="/" class="logo">Portal UI</a>
+            <nav>
+                <ul>
+                    <li><a href="/">Home</a></li>
+                    <li><a href="#about">About</a></li>
+                    <li><a href="#services">Services</a></li>
+                    <li><a href="#contact">Contact</a></li>
+                </ul>
+            </nav>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main>
+        <div class="container">
+            <!-- Hero Section -->
+            <section class="hero">
+                <h1>Welcome to Portal UI</h1>
+                <p>Register today to access our exclusive services and features</p>
+            </section>
+
+            <!-- Registration Form -->
+            <section class="form-container">
+                <h2 class="text-center mb-3">Create Your Account</h2>
+                <form id="registrationForm" action="/submit-registration" method="POST">
+                    
+                    <!-- Full Name -->
+                    <div class="form-group">
+                        <label for="fullName">Full Name *</label>
+                        <input 
+                            type="text" 
+                            id="fullName" 
+                            name="fullName" 
+                            placeholder="Enter your full name"
+                            required
+                        >
+                    </div>
+
+                    <!-- Email -->
+                    <div class="form-group">
+                        <label for="email">Email Address *</label>
+                        <input 
+                            type="email" 
+                            id="email" 
+                            name="email" 
+                            placeholder="your.email@example.com"
+                            required
+                        >
+                    </div>
+
+                    <!-- Phone -->
+                    <div class="form-group">
+                        <label for="phone">Phone Number</label>
+                        <input 
+                            type="tel" 
+                            id="phone" 
+                            name="phone" 
+                            placeholder="+1 (555) 123-4567"
+                        >
+                    </div>
+
+                    <!-- Password -->
+                    <div class="form-group">
+                        <label for="password">Password *</label>
+                        <input 
+                            type="password" 
+                            id="password" 
+                            name="password" 
+                            placeholder="Create a strong password"
+                            required
+                            minlength="8"
+                        >
+                    </div>
+
+                    <!-- Confirm Password -->
+                    <div class="form-group">
+                        <label for="confirmPassword">Confirm Password *</label>
+                        <input 
+                            type="password" 
+                            id="confirmPassword" 
+                            name="confirmPassword" 
+                            placeholder="Re-enter your password"
+                            required
+                            minlength="8"
+                        >
+                    </div>
+
+                    <!-- Service Type -->
+                    <div class="form-group">
+                        <label for="serviceType">Service Interest</label>
+                        <select id="serviceType" name="serviceType">
+                            <option value="">Select a service</option>
+                            <option value="web-development">Web Development</option>
+                            <option value="design">Design Services</option>
+                            <option value="consulting">Consulting</option>
+                            <option value="hosting">Hosting Solutions</option>
+                            <option value="other">Other</option>
+                        </select>
+                    </div>
+
+                    <!-- Terms and Conditions -->
+                    <div class="form-group">
+                        <label>
+                            <input type="checkbox" name="terms" required>
+                            I agree to the <a href="#terms">Terms and Conditions</a>
+                        </label>
+                    </div>
+
+                    <!-- Submit Button -->
+                    <button type="submit" class="btn btn-primary btn-block">
+                        Register Now
+                    </button>
+
+                    <!-- Login Link -->
+                    <p class="text-center mt-3">
+                        Already have an account? <a href="/login.html">Login here</a>
+                    </p>
+                </form>
+            </section>
+
+            <!-- About Section -->
+            <section id="about" class="mt-4">
+                <h2 class="text-center mb-3">About Portal UI</h2>
+                <p class="text-center">
+                    Portal UI provides cutting-edge web solutions for businesses and individuals. 
+                    Join our community to access premium features, professional support, and innovative tools.
+                </p>
+            </section>
+        </div>
+    </main>
+
+    <!-- Footer -->
+    <footer>
+        <div class="container">
+            <p>&copy; 2025 Portal UI. All rights reserved.</p>
+            <p>
+                <a href="#privacy">Privacy Policy</a> | 
+                <a href="#terms">Terms of Service</a> | 
+                <a href="#contact">Contact Us</a>
+            </p>
+        </div>
+    </footer>
+
+    <!-- JavaScript -->
+    <script src="js/main.js"></script>
+    <script>
+        // Additional form validation for password match
+        document.getElementById('registrationForm').addEventListener('submit', function(e) {
+            const password = document.getElementById('password').value;
+            const confirmPassword = document.getElementById('confirmPassword').value;
+            
+            if (password !== confirmPassword) {
+                e.preventDefault();
+                alert('Passwords do not match. Please try again.');
+                document.getElementById('confirmPassword').focus();
+            }
+        });
+    </script>
+</body>
+</html>

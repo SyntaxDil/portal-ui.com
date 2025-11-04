@@ -1,0 +1,40 @@
+# Git Ignore File
+# Excludes files from version control
+
+# Dependencies
+node_modules/
+package-lock.json
+
+# Environment Variables
+.env
+.env.local
+.env.*.local
+
+# Editor Directories
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# OS Files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+
+# Temporary Files
+*.tmp
+*.temp
+.cache/
+site.zip
+
+# Build Output (if needed in future)
+dist/
+build/
+
+# FTP Deploy Logs
+.ftp-deploy-sync-state.json

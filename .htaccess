@@ -1,0 +1,87 @@
+# Apache .htaccess Configuration for GoDaddy Hosting
+# This file configures server behavior for your Portal UI website
+
+# Set Registration.html as the default landing page
+DirectoryIndex Registration.html index.html index.php
+
+# Enable RewriteEngine for URL routing
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    
+    # Force HTTPS (optional but recommended)
+    # Uncomment the following lines to enable HTTPS redirect
+    # RewriteCond %{HTTPS} off
+    # RewriteRule ^(.*)$ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
+    
+    # Remove .html extension from URLs (optional)
+    # Uncomment to enable clean URLs
+    # RewriteCond %{REQUEST_FILENAME} !-d
+    # RewriteCond %{REQUEST_FILENAME}\.html -f
+    # RewriteRule ^(.*)$ $1.html [L]
+    
+    # Redirect root to Registration.html (if DirectoryIndex doesn't work)
+    # RewriteCond %{REQUEST_URI} ^/$
+    # RewriteRule ^$ /Registration.html [L]
+</IfModule>
+
+# Security Headers
+<IfModule mod_headers.c>
+    # Prevent clickjacking
+    Header set X-Frame-Options "SAMEORIGIN"
+    
+    # Enable XSS protection
+    Header set X-XSS-Protection "1; mode=block"
+    
+    # Prevent MIME type sniffing
+    Header set X-Content-Type-Options "nosniff"
+    
+    # Referrer Policy
+    Header set Referrer-Policy "strict-origin-when-cross-origin"
+</IfModule>
+
+# Compression for better performance
+<IfModule mod_deflate.c>
+    AddOutputFilterByType DEFLATE text/html text/plain text/xml text/css text/javascript application/javascript application/json
+</IfModule>
+
+# Browser Caching
+<IfModule mod_expires.c>
+    ExpiresActive On
+    
+    # Images
+    ExpiresByType image/jpeg "access plus 1 year"
+    ExpiresByType image/png "access plus 1 year"
+    ExpiresByType image/gif "access plus 1 year"
+    ExpiresByType image/webp "access plus 1 year"
+    ExpiresByType image/svg+xml "access plus 1 year"
+    ExpiresByType image/x-icon "access plus 1 year"
+    
+    # CSS and JavaScript
+    ExpiresByType text/css "access plus 1 month"
+    ExpiresByType application/javascript "access plus 1 month"
+    ExpiresByType text/javascript "access plus 1 month"
+    
+    # HTML
+    ExpiresByType text/html "access plus 0 seconds"
+</IfModule>
+
+# Custom Error Pages (optional)
+# Uncomment and create these pages if needed
+# ErrorDocument 404 /404.html
+# ErrorDocument 403 /403.html
+# ErrorDocument 500 /500.html
+
+# Disable directory browsing
+Options -Indexes
+
+# Protect sensitive files
+<FilesMatch "^\.">
+    Order allow,deny
+    Deny from all
+</FilesMatch>
+
+# Prevent access to .htaccess and .htpasswd files
+<Files ~ "^\.ht">
+    Order allow,deny
+    Deny from all
+</Files>
