@@ -1,4 +1,4 @@
-# Portal UI Website - GoDaddy Hosting Guide
+![alt text](image.png)# Portal UI Website - GoDaddy Hosting Guide
 
 Professional website with Registration landing page, configured for deployment to GoDaddy hosting.
 
@@ -45,6 +45,102 @@ npm start
 ```
 
 This will open your browser at `http://localhost:8080` with the Registration page.
+
+## 🔐 Make Registration Real (Firebase Auth + Firestore)
+
+Turn the static form into a working registration that creates an account and stores a user profile.
+
+### 0) What we added
+- `js/auth.js` – handles sign-up with Firebase Authentication and saves profiles to Firestore
+- `js/firebase-config.example.js` – copy to `js/firebase-config.js` and fill your Firebase project keys
+- `Registration.html` – loads the config and the auth handler scripts
+
+### 1) Create a Firebase project
+1. Go to https://console.firebase.google.com → Add project
+2. Build → Authentication → Get started → Enable Email/Password
+3. Build → Firestore Database → Create database (Start in production mode)
+4. Project settings → General → Your apps → Web app → Register app → Copy the config object
+
+### 2) Add your config to the site
+Copy the example file and paste your values:
+
+```powershell
+copy js\firebase-config.example.js js\firebase-config.js
+```
+
+Edit `js/firebase-config.js` and replace placeholders with your Firebase config values.
+
+> Note: These keys are safe to expose on the client. Security is enforced by your Firestore rules and Firebase Auth.
+
+### 3) Secure Firestore
+In Firebase console → Firestore → Rules, set:
+
+```
+rules_version = '2';
+service cloud.firestore {
+   match /databases/{database}/documents {
+      match /users/{uid} {
+         allow read, write: if request.auth != null && request.auth.uid == uid;
+      }
+   }
+}
+```
+
+Publish rules.
+
+### 4) Test locally
+```powershell
+npm start
+```
+Fill the form on `http://localhost:8080/Registration.html` and submit. You should see a new user under Authentication → Users, and a profile document under Firestore → `users/{uid}`.
+
+### 5) Deploy
+If you’re using GitHub Pages, push changes to `main`. If hosting on GoDaddy, run:
+
+```powershell
+npm run deploy
+```
+
+### 6) Optional
+- Enable Email Templates → customize verification email
+- Add reCAPTCHA (v3) if you observe abuse
+- Add a `login.html` later to sign in and render account info
+
+## 🔑 Login, Sign‑out, and Password Reset
+
+We added a full login flow using Firebase Authentication.
+
+What’s included
+- `login.html` – login form and an account section shown when signed in
+- `js/login.js` – handles sign‑in, sign‑out, password reset, and live auth state
+
+How to use
+1. Ensure `js/firebase-config.js` exists (see steps above).
+2. Open `/login.html` locally (`npm start`) or on your live site.
+3. Enter the email/password you registered with and submit.
+4. When signed in, you’ll see your email, verification status, and a sign‑out button.
+5. Forgot password? Enter your email in the field and click “Forgot your password?”.
+
+Next steps
+- Create a dedicated `account.html` with profile editing and protected content.
+- Gate certain sections by auth state via `onAuthStateChanged` (we already use this in `login.js`).
+
+## 👤 Account Page (Profile View/Edit)
+
+We added a basic account page protected by auth.
+
+Included
+- `account.html` – requires login; shows email + verification status; profile form for name/phone/service; resend verification; sign out
+- `js/account.js` – loads/saves profile in Firestore (`users/{uid}`), protects access, and wires actions
+
+How to use
+1. Ensure you’re registered and logged in.
+2. Visit `/account.html` directly. If you’re not logged in, you’ll be redirected to `/login.html?redirect=/account.html`.
+3. Update your profile fields and click Save Changes.
+4. If your email isn’t verified, click Resend verification email.
+
+Registration UX
+- After a successful registration, users are redirected to `/account.html` automatically.
 
 ### 2.5 Deploy to GitHub Pages (free) with your domain
 

@@ -26,6 +26,7 @@
                     <li><a href="#contact">Contact</a></li>
                 </ul>
             </nav>
+            <div id="authStatus" aria-live="polite"></div>
         </div>
     </header>
 
@@ -162,6 +163,15 @@
 
     <!-- JavaScript -->
     <script src="js/main.js"></script>
+    
+    <!-- Firebase config (create js/firebase-config.js from js/firebase-config.example.js) -->
+    <script src="js/firebase-config.js"></script>
+    
+    <!-- Auth handler (Firebase Auth + Firestore) -->
+    <script type="module" src="js/auth.js"></script>
+    
+    <!-- Global auth badge/sign-out in header -->
+    <script type="module" src="js/auth-ui.js"></script>
     <script>
         // Additional form validation for password match
         document.getElementById('registrationForm').addEventListener('submit', function(e) {

@@ -1,0 +1,8 @@
+{
+  "name": "SoundWave - A Crowd Sourced Artist Platform",
+  "description": "A crowd-sourced artist platform for musicians to upload, share, and discover music. Explore the global library of tracks and connect with artists.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ]
+}

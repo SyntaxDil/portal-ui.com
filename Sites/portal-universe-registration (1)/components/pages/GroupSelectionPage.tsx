@@ -1,0 +1,42 @@
+import React from 'react';
+import { PortalService } from '../../types';
+import { PortalDJ, PortalLiveStream, PortalGames, PortalMarketplace, PortalApps } from '../portals';
+
+const portals: PortalService[] = [
+  { name: "Portal.DJ", description: "Craft and broadcast electrifying soundscapes across the universe. Our state-of-the-art audio engine and AI-powered mixing tools let you become the ultimate cosmic DJ.", icon: (props) => (<svg {...props} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M9 18V5l12-2v13" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/><circle cx="6" cy="18" r="3" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/><circle cx="18" cy="16" r="3" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>), component: PortalDJ },
+  { name: "Portal.LiveStream", description: "Share your reality in stunning 8K holographic detail. Connect with audiences from across dimensions with our ultra-low latency streaming protocol.", icon: (props) => (<svg {...props} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M17 13.5V21H7V13.5L2 9.5L7.5 4H16.5L22 9.5L17 13.5Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/><path d="M7 13.5L12 17L17 13.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/><path d="M12 3V17" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>), component: PortalLiveStream },
+  { name: "Portal.Games", description: "Dive into hyper-realistic, procedurally generated game worlds. From epic space operas to mind-bending puzzle realms, the ultimate gaming experience awaits.", icon: (props) => (<svg {...props} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M8 12L12 8L16 12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/><path d="M12 8V16" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/><path d="M18 15V18C18 19.1046 17.1046 20 16 20H8C6.89543 20 6 19.1046 6 18V15" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/><path d="M21 12H18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/><path d="M6 12H3" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>), component: PortalGames },
+  { name: "Portal.Marketplace", description: "The central hub for inter-dimensional commerce. Trade unique digital assets, secure your creations on the quantum ledger, and build your economic empire.", icon: (props) => (<svg {...props} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M6 2L3 6V20C3 20.5304 3.21071 21.0391 3.58579 21.4142C3.96086 21.7893 4.46957 22 5 22H19C19.5304 22 20.0391 21.7893 20.4142 21.4142C20.7893 21.0391 21 20.5304 21 20V6L18 2H6Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/><path d="M3 6H21" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/><path d="M16 10C16 11.0609 15.5786 12.0783 14.8284 12.8284C14.0783 13.5786 13.0609 14 12 14C10.9391 14 9.92172 13.5786 9.17157 12.8284C8.42143 12.0783 8 11.0609 8 10" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>), component: PortalMarketplace },
+  { name: "Portal.Apps", description: "Expand your portal's capabilities with a universe of applications. Develop, share, and discover tools that redefine what's possible in a connected reality.", icon: (props) => (<svg {...props} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="3" width="7" height="7" rx="1" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/><rect x="14" y="3" width="7" height="7" rx="1" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/><rect x="14" y="14" width="7" height="7" rx="1" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/><rect x="3" y="14" width="7" height="7" rx="1" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>), component: PortalApps },
+];
+
+
+const GroupSelectionPage: React.FC<{ onSelectPortal: (portal: PortalService) => void }> = ({ onSelectPortal }) => {
+    const soundwaveUrl = (window as any).SOUNDWAVE_URL || 'http://localhost:3001/';
+    return (
+        <main className="relative flex flex-col items-center justify-center min-h-screen w-full bg-gray-900 text-gray-200 overflow-hidden p-4">
+            <div className="absolute inset-0 bg-gradient-to-br from-gray-900 via-indigo-900/30 to-black z-0"></div>
+            <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-cyan-500/10 rounded-full filter blur-3xl animate-pulse"></div>
+            <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-fuchsia-500/10 rounded-full filter blur-3xl animate-pulse animation-delay-4000"></div>
+            <div className="relative z-10 text-center animate-[fadeIn_1s_ease-out]"><h1 className="font-orbitron text-4xl md:text-5xl font-bold text-cyan-300 tracking-wider uppercase">Join an Existing Group</h1><p className="text-gray-400 mt-2 text-lg">Choose your starting point in the Portal Universe.</p></div>
+                        <div className="relative z-10 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-8 mt-12 w-full max-w-7xl animate-[fadeIn_1s_ease-out_0.5s]">
+                                {portals.map((portal) => (
+                                    <div key={portal.name} onClick={() => onSelectPortal(portal)} className="group bg-gray-900/50 backdrop-blur-lg border border-cyan-500/20 rounded-2xl p-6 flex flex-col items-center text-center transform transition-all duration-300 hover:scale-105 hover:bg-cyan-900/40 hover:shadow-2xl hover:shadow-cyan-500/20 cursor-pointer">
+                                        <portal.icon className="h-16 w-16 text-cyan-400 group-hover:text-cyan-200 transition-colors duration-300" />
+                                        <h2 className="font-orbitron text-2xl font-bold text-white mt-4">{portal.name}</h2>
+                                        <p className="text-gray-400 text-sm mt-2 flex-grow">{portal.description}</p>
+                                    </div>
+                                ))}
+                                {/* External app tile: Soundwave */}
+                                <a href={soundwaveUrl} target="_blank" rel="noopener noreferrer" className="group bg-gray-900/50 backdrop-blur-lg border border-fuchsia-500/30 rounded-2xl p-6 flex flex-col items-center text-center transform transition-all duration-300 hover:scale-105 hover:bg-fuchsia-900/30 hover:shadow-2xl hover:shadow-fuchsia-500/20">
+                                    <svg className="h-16 w-16 text-fuchsia-400 group-hover:text-fuchsia-200 transition-colors duration-300" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M3 12h3l2 7 4-14 2 7h5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                                    <h2 className="font-orbitron text-2xl font-bold text-white mt-4">Soundwave</h2>
+                                    <p className="text-gray-400 text-sm mt-2">Open the crowd-sourced artist platform in a new tab.</p>
+                                </a>
+                        </div>
+            <div className="relative z-10 mt-16 text-center animate-[fadeIn_1s_ease-out_1s]"><div className="flex flex-col sm:flex-row gap-6"><button className="font-orbitron text-lg bg-transparent border-2 border-cyan-500 hover:bg-cyan-500 text-cyan-300 hover:text-white font-bold py-3 px-10 rounded-lg shadow-lg shadow-cyan-500/10 transition-all duration-300 tracking-wide">Take a Tour!</button><button className="font-orbitron text-lg bg-cyan-600 hover:bg-cyan-500 text-white font-bold py-3 px-10 rounded-lg shadow-lg shadow-cyan-500/30 transition-all duration-300 transform hover:scale-105 tracking-wide">Explore the Global Channel!</button></div></div>
+        </main>
+    );
+};
+
+export default GroupSelectionPage;

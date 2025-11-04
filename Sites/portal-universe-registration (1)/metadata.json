@@ -1,0 +1,7 @@
+{
+  "name": "Portal Universe Registration",
+  "description": "A futuristic landing page for users to register for the Portal Universe. It features a sleek, dark-themed UI with glowing elements to create an immersive sci-fi experience.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
