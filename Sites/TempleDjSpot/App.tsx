@@ -2,11 +2,13 @@ import React, { useState, useEffect } from 'react';
 import { initializeApp } from 'firebase/app';
 import {
   getAuth,
-  signInAnonymously,
   signInWithCustomToken,
   onAuthStateChanged,
   setPersistence,
-  inMemoryPersistence
+  inMemoryPersistence,
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
+  sendEmailVerification
 } from 'firebase/auth';
 import {
   getFirestore,
@@ -102,23 +104,9 @@ export default function App() {
           setIsAuthReady(true);
           return;
         }
-        try {
-          // If an initial custom token is provided, use it (e.g., from an admin flow)
-          // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-          // @ts-ignore
-          if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-            await setPersistence(authInstance, inMemoryPersistence);
-            // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-            // @ts-ignore
-            await signInWithCustomToken(authInstance, __initial_auth_token);
-            return;
-          }
-        } catch (authError) {
-          console.error('Error during custom-token sign-in:', authError);
-        }
-        // Require real login for backbone access
-        const redirectUrl = '/login.html?redirect=/Spaces/TempleDjs/';
-        window.location.href = redirectUrl;
+        // No user; mark auth ready so UI can show login/register gate (no auto-redirect)
+        setUserId(null);
+        setIsAuthReady(true);
       });
 
       return () => unsubscribe();
@@ -182,6 +170,12 @@ export default function App() {
     }, (err) => {
       console.error('Error listening to schedule:', err);
       setError('Failed to load schedule.');
+    });
+
+    // Ensure a crew meta doc exists for this app/user
+    const metaRef = doc(db, `${baseUserPath}/meta/app`);
+    setDoc(metaRef, { ownerUid: userId, appId, createdAt: new Date().toISOString() }, { merge: true }).catch((e) => {
+      console.warn('Could not ensure crew meta doc', e);
     });
 
     return () => {
@@ -308,7 +302,21 @@ export default function App() {
   const assignedDjIds = new Set((schedule?.timeSlots || []).map(slot => slot.djId).filter(Boolean) as string[]);
   const unassignedDjs = djs.filter(dj => !assignedDjIds.has(dj.id!));
   
-  if (!isAuthReady || !schedule) {
+  if (!isAuthReady) {
+     return (
+        <div className="flex items-center justify-center min-h-screen bg-gray-900 text-white font-sans">
+          <UploadCloud className="animate-pulse w-16 h-16" />
+          <span className="ml-4 text-2xl">Checking session…</span>
+        </div>
+     );
+  }
+
+  // Gate: not logged in — show login/register options
+  if (isAuthReady && !userId) {
+    return <AuthGate auth={auth} db={db} appId={appId} />;
+  }
+
+  if (!schedule) {
      return (
         <div className="flex flex-col items-center justify-center min-h-screen bg-gray-900 text-white font-sans p-4">
           <div className="flex items-center">
@@ -537,6 +545,181 @@ function DJRegistrationForm({ db, userId, appId, setIsLoading, setError, disable
         </button>
       </form>
     </div>
+  );
+}
+
+/**
+ * Logged-out Gate: Login/Register options and inline registration (optional)
+ */
+function AuthGate({ auth, db, appId }: { auth: ReturnType<typeof getAuth> | null; db: any; appId: string }) {
+  // Local state for switching between Login / Register
+  const [mode, setMode] = useState<'login' | 'register'>('login');
+
+  return (
+    <div className="min-h-screen bg-gray-900 text-gray-100 font-sans p-6 flex items-center justify-center">
+      <div className="max-w-2xl w-full bg-gray-800 rounded-xl shadow-lg p-6">
+        <h1 className="text-3xl font-bold text-blue-400 mb-2 text-center">Temple DJ Spot</h1>
+        <p className="text-center text-gray-300 mb-6">Sign in to manage your crew and set times.</p>
+
+        <div className="flex items-center justify-center gap-3 mb-6">
+          <button onClick={() => setMode('login')} className={`py-2 px-4 rounded-md ${mode === 'login' ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-200'}`}>Login</button>
+          <button onClick={() => setMode('register')} className={`py-2 px-4 rounded-md ${mode === 'register' ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-200'}`}>Register</button>
+        </div>
+
+        {mode === 'login' ? (
+          <InlineLogin auth={auth} />
+        ) : (
+          <InlineRegister auth={auth} db={db} appId={appId} />
+        )}
+
+        <div className="mt-6">
+          <InlineRegisterNotice />
+          <TermsAndConditions />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Inline registration helper explaining shared account, with optional quick-register link.
+ */
+function InlineRegisterNotice() {
+  return (
+    <div className="text-sm text-gray-300 space-y-2">
+      <p>
+        Your Portal UI account is shared across sites. Register once on the main site, then return here to manage your crew. 
+        When you first sign in, we’ll set up your crew space automatically.
+      </p>
+    </div>
+  );
+}
+
+/**
+ * Simple Terms & Conditions section
+ */
+function TermsAndConditions() {
+  return (
+    <div className="mt-6 text-xs text-gray-400 border-t border-gray-700 pt-4 leading-relaxed">
+      <p className="font-semibold text-gray-300 mb-1">Terms & Conditions (Summary)</p>
+      <ul className="list-disc ml-5 space-y-1">
+        <li>Use this service responsibly and in compliance with applicable laws.</li>
+        <li>You own the content you upload; you grant us a license to host and display it to provide the service.</li>
+        <li>Don’t upload content that is illegal, infringing, or harmful.</li>
+        <li>We may update features and policies; continued use constitutes acceptance of changes.</li>
+        <li>This service is provided “as is” without warranties; we’re not liable for indirect or consequential damages.</li>
+        <li>If you’re under your regional age of digital consent, use only with a guardian’s permission.</li>
+        <li>We may suspend accounts that violate these terms or abuse resources.</li>
+        <li>For data requests or takedowns, contact support via the main Portal UI site.</li>
+      </ul>
+    </div>
+  );
+}
+
+/** Inline Login form */
+function InlineLogin({ auth }: { auth: ReturnType<typeof getAuth> | null }) {
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!auth) return;
+    setLoading(true);
+    setMsg(null);
+    try {
+      await signInWithEmailAndPassword(auth, email, password);
+      setMsg('Logged in successfully.');
+    } catch (err: any) {
+      console.error(err);
+      const code = err?.code || '';
+      let m = 'Login failed. Check your credentials.';
+      if (code.includes('auth/user-not-found')) m = 'No account with that email.';
+      if (code.includes('auth/wrong-password')) m = 'Incorrect password.';
+      setMsg(m);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-3">
+      <div>
+        <label className="block text-sm text-gray-300">Email</label>
+        <input value={email} onChange={e => setEmail(e.target.value)} type="email" required className="w-full mt-1 p-2 bg-gray-700 border border-gray-600 rounded-md text-white" />
+      </div>
+      <div>
+        <label className="block text-sm text-gray-300">Password</label>
+        <input value={password} onChange={e => setPassword(e.target.value)} type="password" required minLength={6} className="w-full mt-1 p-2 bg-gray-700 border border-gray-600 rounded-md text-white" />
+      </div>
+      {msg && <div className="text-sm text-yellow-300">{msg}</div>}
+      <div className="flex items-center gap-3">
+        <button disabled={loading} type="submit" className="py-2 px-4 bg-blue-600 hover:bg-blue-700 rounded-md">{loading ? 'Signing in…' : 'Sign in'}</button>
+        <a href="/login.html" className="text-sm text-gray-400">I prefer the full login page</a>
+      </div>
+    </form>
+  );
+}
+
+/** Inline Register form */
+function InlineRegister({ auth, db, appId }: { auth: ReturnType<typeof getAuth> | null; db: any; appId: string }) {
+  const [fullName, setFullName] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [confirm, setConfirm] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!auth || !db) return;
+    if (password !== confirm) { setMsg('Passwords do not match'); return; }
+    setLoading(true); setMsg(null);
+    try {
+      const cred = await createUserWithEmailAndPassword(auth, email, password);
+      // store profile
+      await setDoc(doc(db, 'users', cred.user.uid), { uid: cred.user.uid, fullName, email, createdAt: new Date().toISOString() });
+      // create app meta
+      await setDoc(doc(db, `users/${cred.user.uid}/apps/${appId}`, 'meta'), { ownerUid: cred.user.uid, appId, createdAt: new Date().toISOString() });
+      // send verification
+      try { await sendEmailVerification(cred.user); } catch (_) {}
+      setMsg('Registered and signed in. Verification email sent (if supported).');
+    } catch (err: any) {
+      console.error(err);
+      let m = 'Registration failed.';
+      const code = err?.code || '';
+      if (code.includes('auth/email-already-in-use')) m = 'This email is already registered.';
+      if (code.includes('auth/weak-password')) m = 'Password is too weak.';
+      setMsg(m);
+    } finally { setLoading(false); }
+  };
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-3">
+      <div>
+        <label className="block text-sm text-gray-300">Full name</label>
+        <input value={fullName} onChange={e => setFullName(e.target.value)} type="text" required className="w-full mt-1 p-2 bg-gray-700 border border-gray-600 rounded-md text-white" />
+      </div>
+      <div>
+        <label className="block text-sm text-gray-300">Email</label>
+        <input value={email} onChange={e => setEmail(e.target.value)} type="email" required className="w-full mt-1 p-2 bg-gray-700 border border-gray-600 rounded-md text-white" />
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <label className="block text-sm text-gray-300">Password</label>
+          <input value={password} onChange={e => setPassword(e.target.value)} type="password" required minLength={6} className="w-full mt-1 p-2 bg-gray-700 border border-gray-600 rounded-md text-white" />
+        </div>
+        <div>
+          <label className="block text-sm text-gray-300">Confirm</label>
+          <input value={confirm} onChange={e => setConfirm(e.target.value)} type="password" required minLength={6} className="w-full mt-1 p-2 bg-gray-700 border border-gray-600 rounded-md text-white" />
+        </div>
+      </div>
+      {msg && <div className="text-sm text-yellow-300">{msg}</div>}
+      <div>
+        <button disabled={loading} type="submit" className="py-2 px-4 bg-blue-600 hover:bg-blue-700 rounded-md">{loading ? 'Registering…' : 'Create account'}</button>
+      </div>
+    </form>
   );
 }
 
