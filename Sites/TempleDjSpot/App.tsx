@@ -251,7 +251,7 @@ export default function App() {
     setRangeStart(prev => {
       if (prev === null) {
         // If dragging from a slot, start from that source slot; otherwise start from first hovered slot
-        if (dragSource && dragSource.from === 'slot' && typeof dragSource.slotIndex === 'number') {
+        if (dragSource && (dragSource.from === 'slot' || dragSource.from === 'resize') && typeof dragSource.slotIndex === 'number') {
           return dragSource.slotIndex;
         }
         return slotIndex;
@@ -277,13 +277,30 @@ export default function App() {
       
   const scheduleRef = doc(db!, `${sharedMode ? `apps/${appId}` : `users/${userId}/apps/${appId}`}/schedule/mainStage`);
 
-      // If a range was dragged across, apply to entire range
-      const hasRange = rangeStart !== null && rangeEnd !== null;
+      // If a range was dragged across, apply to entire range, but only when SHIFT is held
+      // or when explicitly resizing using a handle
+      const isResizing = sourceData.from === 'resize';
+      const hasRange = (rangeStart !== null && rangeEnd !== null) && (e.shiftKey || isResizing);
       const applyRangeAssign = (assignAsGuest: boolean) => {
-        const start = Math.min(rangeStart!, targetSlotIndex, rangeEnd!);
-        const end = Math.max(rangeStart!, targetSlotIndex, rangeEnd!);
-        const djId = sourceData.from === 'pool' ? sourceData.dj.id : sourceData.djId;
-        const djName = sourceData.from === 'pool' ? sourceData.dj.djName : sourceData.djName;
+        // Compute the intended range
+        let start = Math.min(rangeStart!, targetSlotIndex, rangeEnd!);
+        let end = Math.max(rangeStart!, targetSlotIndex, rangeEnd!);
+        const fromPool = sourceData.from === 'pool';
+        const djId = fromPool ? sourceData.dj.id : sourceData.djId;
+        const djName = fromPool ? sourceData.dj.djName : sourceData.djName;
+
+        // If resizing via right/left handle, only allow extension in the chosen direction
+        if (isResizing && typeof sourceData.slotIndex === 'number') {
+          const origin = sourceData.slotIndex as number;
+          if (sourceData.direction === 'right') {
+            if (targetSlotIndex < origin) { start = origin; end = origin; }
+            else { start = origin; end = Math.max(origin, targetSlotIndex); }
+          } else if (sourceData.direction === 'left') {
+            if (targetSlotIndex > origin) { start = origin; end = origin; }
+            else { start = Math.min(origin, targetSlotIndex); end = origin; }
+          }
+        }
+
         for (let i = start; i <= end; i++) {
           const target = { ...newTimeSlots[i] };
           if (assignAsGuest) {
@@ -301,7 +318,8 @@ export default function App() {
       };
 
       if (hasRange) {
-        applyRangeAssign(e.altKey);
+        // For resize we always place as main (not as guest). For shift-fill, respect Alt modifier.
+        applyRangeAssign(isResizing ? false : e.altKey);
       } else if (sourceData.from === 'pool') {
         // --- Dragging from POOL to SLOT ---
         const djId = sourceData.dj.id as string;
@@ -1121,7 +1139,7 @@ function ScheduleBoard({ schedule, djs, onDjClick, onDragStart, onDragOver, onDr
         {schedule.name} Set Times
       </h2>
       <p className="text-xs text-gray-400 mb-4">
-        Tips: Drag to swap. Hold Shift while dropping to fill all slots in the range. Hold Alt to overlap into a slot without replacing.
+        Tips: Drag to swap. Use the small edge handles on an assigned slot to extend earlier/later. Hold Shift while dropping to fill a range. Hold Alt to overlap into a slot without replacing.
       </p>
       <div className="space-y-4">
         {schedule.timeSlots.map((slot, index) => (
@@ -1204,14 +1222,30 @@ function TimeSlot({ slot, slotIndex, allDjs, onDjClick, onDragStart, onDragOver,
         <Clock className="w-4 h-4 mr-2" />
         {slot.time}
       </div>
-      <div className="flex-grow">
+      <div className="flex-grow relative">
         {dj ? (
-          <DJItem
-            dj={dj}
-            onClick={() => onDjClick(dj)}
-            isDraggable={!disabled}
-            onDragStart={(e) => onDragStart(e, { from: 'slot', slotIndex, djId: dj.id, djName: dj.djName })}
-          />
+          <div className="relative">
+            {/* Left resize handle */}
+            <div
+              draggable={!disabled}
+              onDragStart={(e) => onDragStart(e, { from: 'resize', direction: 'left', slotIndex, djId: dj.id, djName: dj.djName })}
+              title="Extend earlier"
+              className="absolute left-0 top-1/2 -translate-y-1/2 w-2 h-8 bg-blue-500/60 hover:bg-blue-500 rounded-sm cursor-ew-resize"
+            />
+            {/* Right resize handle */}
+            <div
+              draggable={!disabled}
+              onDragStart={(e) => onDragStart(e, { from: 'resize', direction: 'right', slotIndex, djId: dj.id, djName: dj.djName })}
+              title="Extend later"
+              className="absolute right-0 top-1/2 -translate-y-1/2 w-2 h-8 bg-blue-500/60 hover:bg-blue-500 rounded-sm cursor-ew-resize"
+            />
+            <DJItem
+              dj={dj}
+              onClick={() => onDjClick(dj)}
+              isDraggable={!disabled}
+              onDragStart={(e) => onDragStart(e, { from: 'slot', slotIndex, djId: dj.id, djName: dj.djName })}
+            />
+          </div>
         ) : (
           <div className="text-center text-gray-500 p-3 border border-dashed border-gray-600 rounded-md">
             Empty Slot
