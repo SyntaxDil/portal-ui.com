@@ -13,7 +13,11 @@ export default defineConfig(({ mode }) => {
     plugins: [react()],
     build: {
       // Output directly into the repo's Spaces/TempleDjs folder for GitHub Pages
-      outDir: '../../Spaces/TempleDjs'
+      outDir: '../../Spaces/TempleDjs',
+      // Ensure old hashed assets are removed so clients don't load stale bundles
+      emptyOutDir: true,
+      // Work around Windows lock on existing assets folder by using a new assets directory name
+      assetsDir: 'assets2'
     },
     resolve: {
       alias: {
