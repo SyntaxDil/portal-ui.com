@@ -132,8 +132,11 @@ export default function App() {
   useEffect(() => {
     if (!isAuthReady || !db || !userId) return;
 
-    // --- Listener for DJ Collection ---
-    const djsCollectionPath = `artifacts/${appId}/users/${userId}/djs`;
+  // Base path under the authenticated user to align with typical Firestore rules
+  const baseUserPath = `users/${userId}/apps/${appId}`;
+
+  // --- Listener for DJ Collection ---
+  const djsCollectionPath = `${baseUserPath}/djs`;
     const djsQuery = query(collection(db, djsCollectionPath));
     const unsubscribeDjs = onSnapshot(djsQuery, (querySnapshot) => {
       const djsList: DJ[] = [];
@@ -146,8 +149,8 @@ export default function App() {
       setError('Failed to load DJ list.');
     });
 
-    // --- Listener for Schedule Document ---
-    const scheduleDocPath = `artifacts/${appId}/users/${userId}/schedule/mainStage`;
+  // --- Listener for Schedule Document ---
+  const scheduleDocPath = `${baseUserPath}/schedule/mainStage`;
     const scheduleRef = doc(db, scheduleDocPath);
 
     const unsubscribeSchedule = onSnapshot(scheduleRef, async (docSnap) => {
@@ -228,7 +231,7 @@ export default function App() {
       const sourceData = JSON.parse(e.dataTransfer.getData('application/json')) as any;
       const newTimeSlots = [...(schedule as Schedule).timeSlots];
       
-      const scheduleRef = doc(db!, `artifacts/${appId}/users/${userId}/schedule/mainStage`);
+  const scheduleRef = doc(db!, `users/${userId}/apps/${appId}/schedule/mainStage`);
 
       if (sourceData.from === 'pool') {
         // --- Dragging from POOL to SLOT ---
@@ -288,7 +291,7 @@ export default function App() {
          newTimeSlots[sourceSlotIndex] = { ...newTimeSlots[sourceSlotIndex], djId: null, djName: null };
          
          // Update Firestore
-         const scheduleRef = doc(db!, `artifacts/${appId}/users/${userId}/schedule/mainStage`);
+         const scheduleRef = doc(db!, `users/${userId}/apps/${appId}/schedule/mainStage`);
          await updateDoc(scheduleRef, { timeSlots: newTimeSlots });
       }
       // If dragging from pool, do nothing
@@ -307,9 +310,20 @@ export default function App() {
   
   if (!isAuthReady || !schedule) {
      return (
-        <div className="flex items-center justify-center min-h-screen bg-gray-900 text-white font-sans">
-          <UploadCloud className="animate-pulse w-16 h-16" />
-          <span className="ml-4 text-2xl">Loading Crew Data...</span>
+        <div className="flex flex-col items-center justify-center min-h-screen bg-gray-900 text-white font-sans p-4">
+          <div className="flex items-center">
+            <UploadCloud className="animate-pulse w-16 h-16" />
+            <span className="ml-4 text-2xl">Loading Crew Data...</span>
+          </div>
+          {error && (
+            <div className="mt-6 max-w-xl w-full bg-red-800 border border-red-600 text-white p-4 rounded-lg">
+              <div className="flex items-center">
+                <Info className="w-5 h-5 mr-3" />
+                <p className="font-semibold">{error}</p>
+              </div>
+              <p className="text-sm text-red-200 mt-2">If this persists, you may not have permission to read or write your schedule. Please sign out and back in, or contact support.</p>
+            </div>
+          )}
         </div>
      );
   }
@@ -427,7 +441,7 @@ function DJRegistrationForm({ db, userId, appId, setIsLoading, setError, disable
     setError(null);
     
     try {
-      const djsCollectionPath = `artifacts/${appId}/users/${userId}/djs`;
+  const djsCollectionPath = `users/${userId}/apps/${appId}/djs`;
       await addDoc(collection(db, djsCollectionPath), {
         ...formData,
         createdAt: new Date().toISOString()
