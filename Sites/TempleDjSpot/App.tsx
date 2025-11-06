@@ -164,12 +164,14 @@ export default function App() {
           setLoadFailed(false);
         } catch (err) {
           console.error('Error creating base schedule:', err);
+          try { (window as any).firebaseOpsAgent?.log({ level: 'error', type: 'schedule.create.error', code: (err as any)?.code || '', message: (err as any)?.message || '', path: scheduleDocPath }); } catch (_) {}
           setError('Failed to initialize schedule.');
           setLoadFailed(true);
         }
       }
     }, (err: any) => {
       console.error('Error listening to schedule:', err);
+      try { (window as any).firebaseOpsAgent?.log({ level: 'error', type: 'schedule.listen.error', code: (err as any)?.code || '', message: (err as any)?.message || '', path: scheduleDocPath }); } catch (_) {}
       const code = err?.code || '';
       if (code.includes('permission') || code.includes('denied')) {
         setError(`Failed to load schedule (permission denied). Path: ${scheduleDocPath}`);
@@ -362,6 +364,7 @@ export default function App() {
                         setSchedule(base);
                       } catch (e: any) {
                         console.error(e);
+                        try { (window as any).firebaseOpsAgent?.log({ level: 'error', type: 'schedule.create.error', code: (e as any)?.code || '', message: (e as any)?.message || '', path: `${sharedMode ? `apps/${appId}` : `users/${userId}/apps/${appId}`}/schedule/mainStage` }); } catch (_) {}
                         const code = e?.code || '';
                         if (code.includes('permission') || code.includes('denied')) {
                           setError('Could not create base schedule (permission denied). Please update Firestore rules to allow authenticated users to write to this app namespace.');

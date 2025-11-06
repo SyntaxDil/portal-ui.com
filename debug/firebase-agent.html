@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Firebase Ops Agent Dashboard</title>
+  <style>
+    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif; background:#0f172a; color:#e5e7eb; margin:0; }
+    .wrap { max-width: 1000px; margin: 32px auto; padding: 0 16px; }
+    .card { background:#111827; border:1px solid #1f2937; border-radius:10px; padding:16px; margin:12px 0; }
+    button { padding:8px 12px; border-radius:8px; border:1px solid #334155; background:#1d4ed8; color:#fff; cursor:pointer; }
+    button.secondary { background:#374151; }
+    .grid { display:grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
+    .ok { color:#86efac; }
+    .err { color:#fca5a5; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Firebase Ops Agent</h1>
+    <p>Monitors errors and writes event logs to <code class="mono">apps/{appId}/ops/events</code>. This dashboard live-subscribes to the latest 100.</p>
+
+    <div class="card">
+      <button id="ping">Heartbeat</button>
+      <span id="pingOut" class="mono" style="margin-left:8px;"></span>
+    </div>
+
+    <div class="card">
+      <div id="authOut">Checking auth…</div>
+    </div>
+
+    <div class="card">
+      <h3>Recent Events</h3>
+      <div id="events"></div>
+    </div>
+  </div>
+
+  <script type="module">
+    import FirebaseOpsAgent from '/js/firebase-agent.js';
+    import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.13.2/firebase-app.js';
+    import { getAuth, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.13.2/firebase-auth.js';
+    import { getFirestore, collection, query, orderBy, limit, onSnapshot } from 'https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore.js';
+
+    // Initialize agent (singleton is placed on window), but import ensures module is loaded
+    const agent = window.firebaseOpsAgent || new FirebaseOpsAgent();
+
+    const cfg = window.__firebase_config ? JSON.parse(window.__firebase_config) : (window.FIREBASE_CONFIG || null);
+    const appId = window.__app_id || 'temple-djs';
+    const app = initializeApp(cfg, 'agent-dashboard');
+    const auth = getAuth(app);
+    const db = getFirestore(app);
+
+    const authOut = document.getElementById('authOut');
+    onAuthStateChanged(auth, (u) => {
+      if (u) authOut.innerHTML = `Signed in as <strong>${u.email || ''}</strong> (uid: <code class="mono">${u.uid}</code>)`;
+      else authOut.textContent = 'Not signed in. Use Registration or Login, then reload this page.';
+    });
+
+    const pingBtn = document.getElementById('ping');
+    const pingOut = document.getElementById('pingOut');
+    pingBtn.addEventListener('click', async () => {
+      const r = await agent.healthCheck();
+      pingOut.textContent = r.ok ? 'OK' : `Error ${r.code || ''} ${r.message || ''}`;
+    });
+
+    const eventsDiv = document.getElementById('events');
+    const q = query(collection(db, `apps/${appId}/ops/events`), orderBy('when', 'desc'), limit(100));
+    onSnapshot(q, (snap) => {
+      eventsDiv.innerHTML = '';
+      snap.forEach(doc => {
+        const d = doc.data();
+        const el = document.createElement('div');
+        el.className = 'card';
+        el.innerHTML = `<div class="mono" style="opacity:.8;">${new Date(d.when || Date.now()).toLocaleString()} · ${d.level || 'info'} · ${d.type || ''}</div><pre class="mono" style="white-space:pre-wrap">${JSON.stringify(d, null, 2)}</pre>`;
+        eventsDiv.appendChild(el);
+      });
+    });
+  </script>
+</body>
+</html>
