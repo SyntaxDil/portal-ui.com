@@ -110,7 +110,7 @@ function startChat(user) {
 
   // Messages listener
   const msgsQ = query(
-    collection(db, 'apps/_global/chat/messages'),
+    collection(db, 'apps/_global/chat/main/messages'),
     orderBy('createdAt', 'asc'),
     limit(200)
   );
@@ -141,7 +141,7 @@ function startChat(user) {
 
   // Typing indicator
   let typingTimer = null;
-  const typingRef = doc(db, `apps/_global/chat/typing/${user.uid}`);
+  const typingRef = doc(db, `apps/_global/chat/main/typing/${user.uid}`);
   const setTyping = (isTyping) => setDoc(typingRef, { uid: user.uid, email: user.email || null, typing: !!isTyping, ts: serverTimestamp() }, { merge: true }).catch(() => {});
   const onKey = () => {
     setTyping(true);
@@ -154,7 +154,7 @@ function startChat(user) {
   typingListEl.style.fontSize = '12px';
   typingListEl.style.marginTop = '6px';
   listEl && listEl.parentElement && listEl.parentElement.appendChild(typingListEl);
-  const unsubTyping = onSnapshot(query(collection(db, 'apps/_global/chat/typing')), (snap) => {
+  const unsubTyping = onSnapshot(query(collection(db, 'apps/_global/chat/main/typing')), (snap) => {
     const active = [];
     const now = Date.now();
     snap.forEach(d => {
@@ -171,7 +171,7 @@ function startChat(user) {
     const t = input.value.trim();
     if (!t) return;
     try {
-      await addDoc(collection(db, 'apps/_global/chat/messages'), {
+      await addDoc(collection(db, 'apps/_global/chat/main/messages'), {
         uid: user.uid,
         email: user.email || null,
         text: t,

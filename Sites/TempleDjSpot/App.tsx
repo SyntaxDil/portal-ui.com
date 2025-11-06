@@ -592,7 +592,8 @@ function SharedChat({ db, userId, appId, sharedMode, userEmail }: { db: ReturnTy
   const basePath = sharedMode ? `apps/${appId}` : `users/${userId}/apps/${appId}`;
 
   useEffect(() => {
-    const q = query(collection(db, `${basePath}/chat/messages`), orderBy('createdAt', 'asc'), qLimit(100));
+  // Use a concrete room doc ("main") so the collection path has an odd number of segments
+  const q = query(collection(db, `${basePath}/chat/main/messages`), orderBy('createdAt', 'asc'), qLimit(100));
     const unsub = onSnapshot(q, (snap) => {
       const arr: any[] = [];
       snap.forEach(doc => arr.push({ id: doc.id, ...(doc.data() as any) }));
@@ -606,7 +607,7 @@ function SharedChat({ db, userId, appId, sharedMode, userEmail }: { db: ReturnTy
     const t = text.trim();
     if (!t) return;
     try {
-      await addDoc(collection(db, `${basePath}/chat/messages`), {
+      await addDoc(collection(db, `${basePath}/chat/main/messages`), {
         uid: userId,
         email: userEmail || null,
         text: t,
