@@ -89,6 +89,7 @@ export default function App() {
   // UI State
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [loadFailed, setLoadFailed] = useState(false);
   const [dragCounter, setDragCounter] = useState(0); // For styling drop zones
 
   // --- Firebase Initialization and Auth ---
@@ -148,32 +149,24 @@ export default function App() {
     const unsubscribeSchedule = onSnapshot(scheduleRef, async (docSnap) => {
       if (docSnap.exists()) {
         setSchedule(docSnap.data() as Schedule);
+        setLoadFailed(false);
       } else {
-        // Schedule doesn't exist, create a default one
-        const defaultSchedule: Schedule = {
-          name: 'Main Stage',
-          timeSlots: [
-            { time: '18:00 - 19:00', djId: null, djName: null },
-            { time: '19:00 - 20:00', djId: null, djName: null },
-            { time: '20:00 - 21:00', djId: null, djName: null },
-            { time: '21:00 - 22:00', djId: null, djName: null },
-            { time: '22:00 - 23:00', djId: null, djName: null },
-            { time: '23:00 - 00:00', djId: null, djName: null },
-            { time: '00:00 - 01:00', djId: null, djName: null },
-            { time: '01:00 - 02:00', djId: null, djName: null },
-          ],
-        };
+        // No schedule yet — try to create the Temple base schedule (31 Jan 2025)
         try {
-          await setDoc(scheduleRef, defaultSchedule);
-          setSchedule(defaultSchedule);
+          const base = buildTempleBaseSchedule();
+          await setDoc(scheduleRef, base);
+          setSchedule(base);
+          setLoadFailed(false);
         } catch (err) {
-          console.error('Error creating default schedule:', err);
+          console.error('Error creating base schedule:', err);
           setError('Failed to initialize schedule.');
+          setLoadFailed(true);
         }
       }
     }, (err) => {
       console.error('Error listening to schedule:', err);
       setError('Failed to load schedule.');
+      setLoadFailed(true);
     });
 
     // Ensure a crew meta doc exists for this app/user
@@ -345,6 +338,32 @@ export default function App() {
                 <p className="font-semibold">{error}</p>
               </div>
               <p className="text-sm text-red-200 mt-2">If this persists, you may not have permission to read or write your schedule. Please sign out and back in, or contact support.</p>
+              {loadFailed && (
+                <div className="mt-4 flex flex-wrap items-center gap-3">
+                  <button
+                    onClick={async () => {
+                      if (!db || !userId) return;
+                      setIsLoading(true);
+                      setError(null);
+                      try {
+                        const scheduleRef = doc(db, `users/${userId}/apps/${appId}/schedule/mainStage`);
+                        const base = buildTempleBaseSchedule();
+                        await setDoc(scheduleRef, base);
+                        setSchedule(base);
+                      } catch (e) {
+                        console.error(e);
+                        setError('Could not create base schedule.');
+                      } finally {
+                        setIsLoading(false);
+                      }
+                    }}
+                    className="py-2 px-3 bg-blue-600 hover:bg-blue-700 rounded-md text-white"
+                  >
+                    Create Base Schedule (Temple · 31 Jan 2025)
+                  </button>
+                  <a href="/hub.html" className="py-2 px-3 bg-gray-700 hover:bg-gray-600 rounded-md text-white">Enter the Portal</a>
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -366,6 +385,9 @@ export default function App() {
             {isAdmin && (
               <span className="inline-flex items-center px-2 py-0.5 rounded bg-green-800 text-green-200 text-xs uppercase tracking-wide">Admin</span>
             )}
+            <div className="mt-2">
+              <a href="/hub.html" className="inline-block py-1.5 px-3 bg-indigo-600 hover:bg-indigo-700 rounded-md text-white">Enter the Portal</a>
+            </div>
           </div>
         )}
       </header>
@@ -438,6 +460,31 @@ export default function App() {
       )}
     </div>
   );
+}
+
+// --- Helpers ---
+
+function buildTempleBaseSchedule(): Schedule {
+  const name = 'Temple - 31 Jan 2025';
+  // 12:00 to 24:00 in 15-minute blocks
+  const startMinutes = 12 * 60; // 12:00
+  const endMinutes = 24 * 60;   // 24:00
+  const slots: TimeSlot[] = [];
+  for (let m = startMinutes; m < endMinutes; m += 15) {
+    const from = formatHm(m);
+    const to = formatHm(m + 15);
+    slots.push({ time: `${from} - ${to}`, djId: null, djName: null });
+  }
+  return { name, timeSlots: slots };
+}
+
+function formatHm(totalMinutes: number): string {
+  const mins = ((totalMinutes % (24 * 60)) + (24 * 60)) % (24 * 60); // wrap
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
+  const hh = h.toString().padStart(2, '0');
+  const mm = m.toString().padStart(2, '0');
+  return `${hh}:${mm}`;
 }
 
 // --- Sub-Components ---
