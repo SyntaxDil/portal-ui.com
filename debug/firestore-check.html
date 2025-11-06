@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Firestore Health Check</title>
+  <style>
+    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif; background:#0f172a; color:#e5e7eb; margin:0; }
+    .wrap { max-width: 900px; margin: 32px auto; padding: 0 16px; }
+    .card { background:#111827; border:1px solid #1f2937; border-radius:10px; padding:16px; margin:12px 0; }
+    button { padding:8px 12px; border-radius:8px; border:1px solid #334155; background:#1d4ed8; color:#fff; cursor:pointer; }
+    button.secondary { background:#374151; }
+    code { background:#0b1220; padding:2px 4px; border-radius:4px; }
+    .ok { color:#86efac; }
+    .err { color:#fca5a5; }
+    pre { white-space: pre-wrap; word-break: break-word; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Firestore Health Check</h1>
+    <p>This page signs you in via the site config and attempts to read/write test docs under both namespaces.</p>
+
+    <div class="card">
+      <div id="authState">Checking auth…</div>
+      <div style="margin-top:8px;">
+        <button id="signOutBtn" class="secondary">Sign out</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>Shared namespace</h3>
+      <p>Path base: <code>apps/temple-djs</code></p>
+      <button id="testShared">Test read/write</button>
+      <pre id="outShared"></pre>
+    </div>
+
+    <div class="card">
+      <h3>Per-user namespace</h3>
+      <p>Path base: <code>users/{uid}/apps/temple-djs</code></p>
+      <button id="testUser">Test read/write</button>
+      <pre id="outUser"></pre>
+    </div>
+  </div>
+
+  <script src="/js/firebase-config.js"></script>
+  <script type="module">
+    import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.13.2/firebase-app.js';
+    import { getAuth, onAuthStateChanged, signOut } from 'https://www.gstatic.com/firebasejs/10.13.2/firebase-auth.js';
+    import { getFirestore, doc, setDoc, getDoc, serverTimestamp } from 'https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore.js';
+
+    const cfg = window.FIREBASE_CONFIG;
+    const app = initializeApp(cfg);
+    const auth = getAuth(app);
+    const db = getFirestore(app);
+
+    const authState = document.getElementById('authState');
+    const signOutBtn = document.getElementById('signOutBtn');
+    const outShared = document.getElementById('outShared');
+    const outUser = document.getElementById('outUser');
+
+    onAuthStateChanged(auth, (user) => {
+      if (user) {
+        authState.innerHTML = `Signed in as <strong>${user.email || ''}</strong> (uid: <code>${user.uid}</code>)`;
+      } else {
+        authState.textContent = 'Not signed in. Use Registration or Login, then reload this page.';
+      }
+    });
+
+    signOutBtn.addEventListener('click', async () => {
+      await signOut(auth);
+      location.reload();
+    });
+
+    async function testSharedNS() {
+      outShared.textContent = 'Running…';
+      try {
+        const ref = doc(db, 'apps/temple-djs/_health');
+        await setDoc(ref, { ok: true, ts: serverTimestamp() }, { merge: true });
+        const snap = await getDoc(ref);
+        outShared.innerHTML = `<span class="ok">OK</span> Wrote and read: ${JSON.stringify(snap.data())}`;
+      } catch (e) {
+        outShared.innerHTML = `<span class="err">ERROR</span> ${e.code || ''} ${e.message || e}`;
+      }
+    }
+
+    async function testUserNS() {
+      outUser.textContent = 'Running…';
+      try {
+        const uid = auth.currentUser?.uid;
+        if (!uid) throw new Error('Not signed in');
+        const ref = doc(db, `users/${uid}/apps/temple-djs/_health`);
+        await setDoc(ref, { ok: true, ts: serverTimestamp() }, { merge: true });
+        const snap = await getDoc(ref);
+        outUser.innerHTML = `<span class="ok">OK</span> Wrote and read: ${JSON.stringify(snap.data())}`;
+      } catch (e) {
+        outUser.innerHTML = `<span class="err">ERROR</span> ${e.code || ''} ${e.message || e}`;
+      }
+    }
+
+    document.getElementById('testShared').addEventListener('click', testSharedNS);
+    document.getElementById('testUser').addEventListener('click', testUserNS);
+  </script>
+</body>
+</html>
