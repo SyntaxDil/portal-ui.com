@@ -30,6 +30,25 @@
   </head>
   <body class="min-h-screen bg-gray-900">
     <div id="root"></div>
+    <!-- Minimal runtime error overlay to avoid silent blank screens -->
+    <style>
+      #runtime-error-overlay{position:fixed;z-index:9999;left:0;right:0;top:0;background:#7f1d1d;color:#fff;border-bottom:1px solid #b91c1c;font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Ubuntu;display:none}
+      #runtime-error-overlay .inner{max-width:960px;margin:0 auto;padding:10px 14px;}
+      #runtime-error-overlay .msg{white-space:pre-wrap;word-break:break-word;font-size:14px}
+    </style>
+    <div id="runtime-error-overlay"><div class="inner"><strong>Temple DJ failed to load</strong><div id="runtime-error-msg" class="msg"></div></div></div>
+    <script>
+      (function(){
+        function showErr(msg){
+          var el=document.getElementById('runtime-error-overlay');
+          var m=document.getElementById('runtime-error-msg');
+          if(!el||!m) return; m.textContent=String(msg||'Unknown error'); el.style.display='block';
+          try{window.firebaseOpsAgent && window.firebaseOpsAgent.log({level:'error',type:'runtime.error',message:String(msg)})}catch(_){}
+        }
+        window.addEventListener('error', function(e){ showErr(e.message || e.error || 'Script error'); });
+        window.addEventListener('unhandledrejection', function(e){ showErr((e.reason && (e.reason.message||e.reason)) || 'Unhandled rejection'); });
+      })();
+    </script>
     <script type="module" src="/index.tsx"></script>
   </body>
 </html>
