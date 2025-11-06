@@ -151,7 +151,7 @@ export default function App() {
   const scheduleDocPath = `${basePath}/schedule/mainStage`;
     const scheduleRef = doc(db, scheduleDocPath);
 
-    const unsubscribeSchedule = onSnapshot(scheduleRef, async (docSnap) => {
+  const unsubscribeSchedule = onSnapshot(scheduleRef, async (docSnap) => {
       if (docSnap.exists()) {
         setSchedule(docSnap.data() as Schedule);
         setLoadFailed(false);
@@ -168,9 +168,14 @@ export default function App() {
           setLoadFailed(true);
         }
       }
-    }, (err) => {
+    }, (err: any) => {
       console.error('Error listening to schedule:', err);
-      setError('Failed to load schedule.');
+      const code = err?.code || '';
+      if (code.includes('permission') || code.includes('denied')) {
+        setError(`Failed to load schedule (permission denied). Path: ${scheduleDocPath}`);
+      } else {
+        setError('Failed to load schedule.');
+      }
       setLoadFailed(true);
     });
 
@@ -351,13 +356,18 @@ export default function App() {
                       setIsLoading(true);
                       setError(null);
                       try {
-                        const scheduleRef = doc(db, `users/${userId}/apps/${appId}/schedule/mainStage`);
+                        const scheduleRef = doc(db, `${sharedMode ? `apps/${appId}` : `users/${userId}/apps/${appId}`}/schedule/mainStage`);
                         const base = buildTempleBaseSchedule();
                         await setDoc(scheduleRef, base);
                         setSchedule(base);
-                      } catch (e) {
+                      } catch (e: any) {
                         console.error(e);
-                        setError('Could not create base schedule.');
+                        const code = e?.code || '';
+                        if (code.includes('permission') || code.includes('denied')) {
+                          setError('Could not create base schedule (permission denied). Please update Firestore rules to allow authenticated users to write to this app namespace.');
+                        } else {
+                          setError('Could not create base schedule.');
+                        }
                       } finally {
                         setIsLoading(false);
                       }

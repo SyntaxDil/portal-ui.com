@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Temple Schedule</title>
+  <meta name="description" content="Temple schedule editor (shared). Sign in to edit 15-minute slots.">
+  <style>
+    html, body { height: 100%; margin: 0; background: #0f172a; }
+    .frame { position: fixed; inset: 0; width: 100%; height: 100%; border: 0; }
+    .fallback { position: absolute; inset: 0; display: grid; place-items: center; color: #e5e7eb; font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif; }
+    .fallback a { color: #93c5fd; }
+  </style>
+</head>
+<body>
+  <iframe class="frame" src="/Spaces/TempleDjs/" title="Temple Schedule"></iframe>
+  <noscript>
+    <div class="fallback">
+      <p>Temple schedule requires JavaScript. Open <a href="/Spaces/TempleDjs/">/Spaces/TempleDjs/</a>.</p>
+    </div>
+  </noscript>
+</body>
+</html>
