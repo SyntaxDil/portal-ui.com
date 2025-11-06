@@ -1,6 +1,6 @@
 import { initializeApp, getApps, getApp } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-app.js";
 import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-auth.js";
-import { getFirestore, collection, addDoc, serverTimestamp, query, orderBy, limit, onSnapshot, doc, setDoc } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore.js";
+import { getFirestore, collection, addDoc, serverTimestamp, query, orderBy, limit, onSnapshot, doc, setDoc, getDocs, endBefore, startAfter } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore.js";
 
 const cfg = window.FIREBASE_CONFIG;
 let app = null;
@@ -38,8 +38,16 @@ function renderMessages(listEl, msgs) {
     const text = document.createElement('span');
     text.style.color = '#e5e7eb';
     text.textContent = m.text;
+    const ts = document.createElement('span');
+    ts.style.color = '#9ca3af';
+    ts.style.fontSize = '11px';
+    ts.style.marginLeft = '6px';
+    // Handle serverTimestamp placeholders safely
+    const d = m.createdAt && m.createdAt.toDate ? m.createdAt.toDate() : null;
+    ts.textContent = d ? d.toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'}) : '';
     line.appendChild(who);
     line.appendChild(text);
+    if (ts.textContent) line.appendChild(ts);
     listEl.appendChild(line);
   });
   listEl.scrollTop = listEl.scrollHeight;
@@ -74,12 +82,18 @@ function startOnlineCount(user, onlineEl) {
   const unsub = onSnapshot(q, (snap) => {
     const now = Date.now();
     let count = 0;
+    const emails = [];
     snap.forEach(d => {
       const data = d.data();
       const ts = data.lastSeen && data.lastSeen.toMillis ? data.lastSeen.toMillis() : 0;
-      if (ts && (now - ts) < 60000) count += 1; // seen within 60s
+      if (ts && (now - ts) < 60000) {
+        count += 1;
+        if (emails.length < 5) emails.push(data.email || (data.uid || '').slice(0,6));
+      }
     });
-    if (onlineEl) onlineEl.textContent = `Online: ${count}`;
+    if (onlineEl) onlineEl.textContent = `Online: ${count}${emails.length? ' · ' + emails.join(', '): ''}`;
+  }, (err) => {
+    if (onlineEl) onlineEl.textContent = 'Online: —';
   });
   return () => unsub();
 }
@@ -104,11 +118,52 @@ function startChat(user) {
     const arr = [];
     snap.forEach(doc => arr.push({ id: doc.id, ...doc.data() }));
     renderMessages(listEl, arr);
+  }, (err) => {
+    if (listEl) {
+      listEl.innerHTML = '';
+      const div = document.createElement('div');
+      div.style.color = '#fca5a5';
+      div.style.fontSize = '14px';
+      const code = (err && err.code) || '';
+      if (code.includes('permission')) {
+        div.textContent = 'Chat unavailable (permission denied). Ask admin to allow apps/_global/** in Firestore rules.';
+      } else {
+        div.textContent = 'Chat failed to load. Please retry later.';
+      }
+      listEl.appendChild(div);
+    }
+    try { window.firebaseOpsAgent && window.firebaseOpsAgent.log({ level: 'error', type: 'chat.listen.error', message: err?.message || '', code: err?.code || ''}); } catch(_){}
   });
 
   // Presence
   const stopPresence = startPresence(user);
   const stopOnline = startOnlineCount(user, onlineEl);
+
+  // Typing indicator
+  let typingTimer = null;
+  const typingRef = doc(db, `apps/_global/chat/typing/${user.uid}`);
+  const setTyping = (isTyping) => setDoc(typingRef, { uid: user.uid, email: user.email || null, typing: !!isTyping, ts: serverTimestamp() }, { merge: true }).catch(() => {});
+  const onKey = () => {
+    setTyping(true);
+    if (typingTimer) clearTimeout(typingTimer);
+    typingTimer = setTimeout(() => setTyping(false), 1500);
+  };
+  input.addEventListener('input', onKey);
+  const typingListEl = document.createElement('div');
+  typingListEl.style.color = '#9ca3af';
+  typingListEl.style.fontSize = '12px';
+  typingListEl.style.marginTop = '6px';
+  listEl && listEl.parentElement && listEl.parentElement.appendChild(typingListEl);
+  const unsubTyping = onSnapshot(query(collection(db, 'apps/_global/chat/typing')), (snap) => {
+    const active = [];
+    const now = Date.now();
+    snap.forEach(d => {
+      const data = d.data();
+      const ts = data.ts && data.ts.toMillis ? data.ts.toMillis() : 0;
+      if (data.typing && ts && (now - ts) < 2000) active.push(data.email || (data.uid || '').slice(0,6));
+    });
+    typingListEl.textContent = active.length ? `${active.join(', ')} typing…` : '';
+  }, () => { typingListEl.textContent = ''; });
 
   // Send handler
   const onSubmit = async (e) => {
@@ -123,6 +178,7 @@ function startChat(user) {
         createdAt: serverTimestamp(),
       });
       input.value = '';
+      setTyping(false);
     } catch (e) {
       console.warn('chat send failed', e);
     }
@@ -131,9 +187,11 @@ function startChat(user) {
 
   return () => {
     unsubMsgs && unsubMsgs();
+    unsubTyping && unsubTyping();
     stopPresence && stopPresence();
     stopOnline && stopOnline();
     form.removeEventListener('submit', onSubmit);
+    input.removeEventListener('input', onKey);
   };
 }
 

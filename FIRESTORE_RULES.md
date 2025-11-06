@@ -22,6 +22,12 @@ service cloud.firestore {
       allow read, write: if request.auth != null;
     }
 
+    // 2b) Global portal chat & presence
+    //     Used by Hub chat widget at apps/_global/chat/... and apps/_global/presence/...
+    match /apps/_global/{document=**} {
+      allow read, write: if request.auth != null;
+    }
+
     // 3) (Optional) Public read of published schedules
     // match /apps/{appId}/schedule/{docId} {
     //   allow read: if true;            // public

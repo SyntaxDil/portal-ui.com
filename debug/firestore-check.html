@@ -43,6 +43,13 @@
     </div>
   </div>
 
+  <div class="card">
+    <h3>Global chat namespace</h3>
+    <p>Path base: <code>apps/_global</code></p>
+    <button id="testGlobal">Test chat read/write</button>
+    <pre id="outGlobal"></pre>
+  </div>
+
   <script src="/js/firebase-config.js"></script>
   <script type="module">
     import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.13.2/firebase-app.js';
@@ -57,7 +64,8 @@
     const authState = document.getElementById('authState');
     const signOutBtn = document.getElementById('signOutBtn');
     const outShared = document.getElementById('outShared');
-    const outUser = document.getElementById('outUser');
+  const outUser = document.getElementById('outUser');
+  const outGlobal = document.getElementById('outGlobal');
 
     onAuthStateChanged(auth, (user) => {
       if (user) {
@@ -98,8 +106,21 @@
       }
     }
 
+    async function testGlobalNS() {
+      outGlobal.textContent = 'Running…';
+      try {
+        const ref = doc(db, 'apps/_global/_health');
+        await setDoc(ref, { ok: true, ts: serverTimestamp() }, { merge: true });
+        const snap = await getDoc(ref);
+        outGlobal.innerHTML = `<span class="ok">OK</span> Wrote and read: ${JSON.stringify(snap.data())}`;
+      } catch (e) {
+        outGlobal.innerHTML = `<span class="err">ERROR</span> ${e.code || ''} ${e.message || e}`;
+      }
+    }
+
     document.getElementById('testShared').addEventListener('click', testSharedNS);
     document.getElementById('testUser').addEventListener('click', testUserNS);
+    document.getElementById('testGlobal').addEventListener('click', testGlobalNS);
   </script>
 </body>
 </html>
