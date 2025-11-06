@@ -74,9 +74,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
       toast('Registration successful! Check your email for verification.');
       form.reset();
-      // Redirect to account page after a short delay
+      // Redirect to Hub after a short delay
       setTimeout(() => {
-        window.location.href = '/account.html';
+        window.location.href = '/hub.html';
       }, 1200);
     } catch (err) {
       console.error(err);

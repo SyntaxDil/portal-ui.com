@@ -1,0 +1,7 @@
+from_url,to_url,type,notes
+https://jackeddnb.wixsite.com/jackeddnb,https://www.portal-ui.com/Sites/JackedDnb/,302,Temporary redirect during migration
+https://jackeddnb.wixsite.com/jackeddnb/livestreams,https://www.portal-ui.com/Sites/JackedDnb/livestreams/,301,
+https://jackeddnb.wixsite.com/jackeddnb/services,https://www.portal-ui.com/Sites/JackedDnb/services/,301,
+https://jackeddnb.wixsite.com/jackeddnb/basic-01,https://www.portal-ui.com/Sites/JackedDnb/basic-01/,301,Confirm final name
+https://jackeddnb.wixsite.com/jackeddnb/event-details/bou-uk,https://www.portal-ui.com/Sites/JackedDnb/event-details/bou-uk/,301,Historical
+https://jackeddnb.wixsite.com/jackeddnb/event-details/black-barrel-ru,https://www.portal-ui.com/Sites/JackedDnb/event-details/black-barrel-ru/,301,Historical

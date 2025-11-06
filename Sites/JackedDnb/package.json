@@ -1,0 +1,14 @@
+{
+    "name": "jackeddnb-transition",
+    "private": true,
+    "version": "0.1.0",
+    "description": "Transition workspace for hosting the Jacked site under /Sites/JackedDnb",
+    "scripts": {
+        "dev": "http-server . -p 5173 -c-1",
+        "preview": "http-server . -p 4173 -c-1",
+        "clean": "powershell -NoProfile -Command \"Write-Output 'Nothing to clean'\""
+    },
+    "devDependencies": {
+        "http-server": "^14.1.1"
+    }
+}

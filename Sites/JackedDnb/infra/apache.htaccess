@@ -1,0 +1,12 @@
+# Apache sample (.htaccess) for subfolder routing
+RewriteEngine On
+# Adjust the base to match actual subpath
+RewriteBase /Sites/JackedDnb/
+
+# Serve existing files and directories
+RewriteCond %{REQUEST_FILENAME} -f [OR]
+RewriteCond %{REQUEST_FILENAME} -d
+RewriteRule ^ - [L]
+
+# Fallback to the placeholder index.html
+RewriteRule ^ index.html [L]

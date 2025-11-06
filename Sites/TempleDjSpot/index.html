@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Temple DJ Spot</title>
+    <!-- Tailwind via CDN for quick styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- Optional: Inject Firebase config at runtime
+      Set these on the page or hosting environment before the app script runs.
+      window.__firebase_config should be a JSON string of Firebase config.
+      window.__app_id identifies this app's artifact namespace.
+      window.__initial_auth_token (optional) for custom-token auth.
+    -->
+    <script>
+        window.__app_id = 'temple-djs';
+        window.__firebase_config = JSON.stringify({
+        apiKey: "AIzaSyAkIjtyaYwcTPsFcDfJsoyQgRzCakgd1ic",
+        authDomain: "portal-ui-1eac6.firebaseapp.com",
+        projectId: "portal-ui-1eac6",
+        storageBucket: "portal-ui-1eac6.firebasestorage.app",
+        messagingSenderId: "234949673103",
+        appId: "1:234949673103:web:c502f79df4b040305f30fa"
+        });
+    </script>
+  </head>
+  <body class="min-h-screen bg-gray-900">
+    <div id="root"></div>
+    <script type="module" src="/index.tsx"></script>
+  </body>
+</html>

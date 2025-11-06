@@ -3,6 +3,30 @@ require('dotenv').config();
 const FtpDeploy = require('ftp-deploy');
 const ftpDeploy = new FtpDeploy();
 
+// Simple CLI args parser (no external deps)
+const argv = process.argv.slice(2);
+const getArg = (name) => {
+    const i = argv.indexOf(`--${name}`);
+    return i !== -1 ? argv[i + 1] : undefined;
+};
+const hasFlag = (name) => argv.includes(`--${name}`);
+
+// Predefined targets to simplify subfolder deployments
+const targets = {
+    jacked: {
+        local: './Sites/JackedDnb/site',
+        remote: '/public_html/Sites/JackedDnb',
+    },
+    templedjs: {
+        local: './Sites/TempleDjSpot/site',
+        remote: '/public_html/Spaces/TempleDjs',
+    },
+    templedjs_backbones: {
+        local: './Sites/TempleDjSpot/site',
+        remote: '/public_html/DoofBackBones',
+    },
+};
+
 // FTP Configuration from environment variables
 const config = {
     user: process.env.FTP_USER,
@@ -41,6 +65,34 @@ const config = {
     // SFTP options (set to false for standard FTP)
     sftp: false
 };
+
+// Apply target or explicit overrides
+const target = getArg('target');
+if (target && targets[target]) {
+    config.localRoot = targets[target].local;
+    config.remoteRoot = targets[target].remote;
+}
+
+// Direct overrides via CLI
+config.localRoot = getArg('local') || config.localRoot;
+config.remoteRoot = getArg('remote') || config.remoteRoot;
+if (hasFlag('delete')) config.deleteRemote = true;
+
+// Optional print-only mode for safe verification
+if (hasFlag('print')) {
+    console.log('🧪 Deployment configuration (print-only):');
+    console.log({
+        host: config.host,
+        user: config.user,
+        port: config.port,
+        localRoot: config.localRoot,
+        remoteRoot: config.remoteRoot,
+        deleteRemote: config.deleteRemote,
+        forcePasv: config.forcePasv,
+        sftp: config.sftp,
+    });
+    process.exit(0);
+}
 
 // Validate configuration
 if (!config.user || !config.password || !config.host) {

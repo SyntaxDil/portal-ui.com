@@ -47,6 +47,11 @@ function renderLoggedIn(el, user) {
   email.textContent = user.email || 'Signed in';
   email.style.opacity = '0.85';
 
+  const hub = document.createElement('a');
+  hub.href = '/hub.html';
+  hub.textContent = 'Hub';
+  hub.className = 'btn-link';
+
   const account = document.createElement('a');
   account.href = '/account.html';
   account.textContent = 'Account';
@@ -71,11 +76,15 @@ function renderLoggedIn(el, user) {
     }
   });
 
-  const dot = document.createElement('span');
-  dot.textContent = '·';
-  dot.style.opacity = '0.6';
+  const dot1 = document.createElement('span');
+  dot1.textContent = '·';
+  dot1.style.opacity = '0.6';
 
-  el.append(email, dot, account, btn);
+  const dot2 = document.createElement('span');
+  dot2.textContent = '·';
+  dot2.style.opacity = '0.6';
+
+  el.append(email, dot1, hub, dot2, account, btn);
 }
 
 document.addEventListener('DOMContentLoaded', () => {
