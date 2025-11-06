@@ -20,6 +20,9 @@ import {
   addDoc,
   query,
   arrayUnion,
+  orderBy,
+  limit as qLimit,
+  serverTimestamp,
 } from 'firebase/firestore';
 import {
   Users,
@@ -63,6 +66,8 @@ interface TimeSlot {
   time: string;
   djId: string | null;
   djName: string | null;
+  // Optional list of additional DJs sharing this slot
+  guests?: Array<{ djId: string; djName: string }>
 }
 
 interface Schedule {
@@ -260,8 +265,17 @@ export default function App() {
            newTimeSlots[targetSlotIndex] = { ...newTimeSlots[targetSlotIndex], djId, djName };
            newTimeSlots[existingSlotIndex] = { ...newTimeSlots[existingSlotIndex], djId: targetDj.djId, djName: targetDj.djName };
         } else {
-          // DJ is not scheduled, just add them
-          newTimeSlots[targetSlotIndex] = { ...newTimeSlots[targetSlotIndex], djId, djName };
+          // DJ is not scheduled yet
+          const target = { ...newTimeSlots[targetSlotIndex] };
+          if (target.djId && target.djId !== djId) {
+            // Slot already has a main DJ — add as guest to allow overlap
+            const guests = Array.isArray(target.guests) ? [...target.guests] : [];
+            if (!guests.find(g => g.djId === djId)) guests.push({ djId, djName });
+            newTimeSlots[targetSlotIndex] = { ...target, guests };
+          } else {
+            // Empty slot (or same DJ)
+            newTimeSlots[targetSlotIndex] = { ...target, djId, djName };
+          }
         }
         
       } else if (sourceData.from === 'slot') {
@@ -269,12 +283,35 @@ export default function App() {
         const sourceSlotIndex = sourceData.slotIndex as number;
         if (sourceSlotIndex === targetSlotIndex) return; // Dropped on itself
 
-        const sourceSlot = { ...newTimeSlots[sourceSlotIndex] };
-        const targetSlot = { ...newTimeSlots[targetSlotIndex] };
-
-        // Swap 'em
-        newTimeSlots[targetSlotIndex] = { ...targetSlot, djId: sourceSlot.djId, djName: sourceSlot.djName };
-        newTimeSlots[sourceSlotIndex] = { ...sourceSlot, djId: targetSlot.djId, djName: targetSlot.djName };
+        if (e.shiftKey) {
+          // Range fill: assign the source DJ across all slots in range
+          const start = Math.min(sourceSlotIndex, targetSlotIndex);
+          const end = Math.max(sourceSlotIndex, targetSlotIndex);
+          const sourceSlot = { ...newTimeSlots[sourceSlotIndex] };
+          for (let i = start; i <= end; i++) {
+            newTimeSlots[i] = { ...newTimeSlots[i], djId: sourceSlot.djId, djName: sourceSlot.djName };
+          }
+        } else if (e.altKey) {
+          // Overlap into target (copy), keep source as-is
+          const sourceSlot = { ...newTimeSlots[sourceSlotIndex] };
+          const targetSlot = { ...newTimeSlots[targetSlotIndex] };
+          if (targetSlot.djId && targetSlot.djId !== sourceSlot.djId) {
+            const guests = Array.isArray(targetSlot.guests) ? [...targetSlot.guests] : [];
+            if (sourceSlot.djId && !guests.find(g => g.djId === sourceSlot.djId)) {
+              guests.push({ djId: sourceSlot.djId, djName: sourceSlot.djName || '' });
+              newTimeSlots[targetSlotIndex] = { ...targetSlot, guests };
+            }
+          } else {
+            // If empty or same, just assign
+            newTimeSlots[targetSlotIndex] = { ...targetSlot, djId: sourceSlot.djId, djName: sourceSlot.djName };
+          }
+        } else {
+          const sourceSlot = { ...newTimeSlots[sourceSlotIndex] };
+          const targetSlot = { ...newTimeSlots[targetSlotIndex] };
+          // Swap 'em
+          newTimeSlots[targetSlotIndex] = { ...targetSlot, djId: sourceSlot.djId, djName: sourceSlot.djName };
+          newTimeSlots[sourceSlotIndex] = { ...sourceSlot, djId: targetSlot.djId, djName: targetSlot.djName };
+        }
       }
       
       // Update Firestore
@@ -319,7 +356,12 @@ export default function App() {
   };
 
   // --- Calculate Unassigned DJs ---
-  const assignedDjIds = new Set((schedule?.timeSlots || []).map(slot => slot.djId).filter(Boolean) as string[]);
+  const assignedDjIds = new Set(
+    (schedule?.timeSlots || []).flatMap(slot => [
+      ...(slot.djId ? [slot.djId] : []),
+      ...((slot.guests || []).map(g => g.djId))
+    ])
+  );
   const unassignedDjs = djs.filter(dj => !assignedDjIds.has(dj.id!));
   
   if (!isAuthReady) {
@@ -464,6 +506,11 @@ export default function App() {
         
       </main>
 
+      {/* --- Shared Chat --- */}
+      <div className="mt-8">
+        <SharedChat db={db!} userId={userId!} appId={appId} sharedMode={sharedMode} userEmail={userEmail} />
+      </div>
+
       {/* --- Admin Settings (if admin) --- */}
       {isAdmin && !sharedMode && (
         <div className="mb-6 mx-auto max-w-2xl bg-gray-800 p-4 rounded-lg">
@@ -476,6 +523,62 @@ export default function App() {
       {modalOpen && selectedDj && (
         <DJModal dj={selectedDj} onClose={handleCloseModal} />
       )}
+    </div>
+  );
+}
+
+/**
+ * Shared Chat (simple global room per appId)
+ */
+function SharedChat({ db, userId, appId, sharedMode, userEmail }: { db: ReturnType<typeof getFirestore>; userId: string; appId: string; sharedMode: boolean; userEmail: string | null }) {
+  const [messages, setMessages] = useState<Array<{ id: string; uid: string; email?: string | null; text: string; createdAt?: any }>>([]);
+  const [text, setText] = useState('');
+  const basePath = sharedMode ? `apps/${appId}` : `users/${userId}/apps/${appId}`;
+
+  useEffect(() => {
+    const q = query(collection(db, `${basePath}/chat/messages`), orderBy('createdAt', 'asc'), qLimit(100));
+    const unsub = onSnapshot(q, (snap) => {
+      const arr: any[] = [];
+      snap.forEach(doc => arr.push({ id: doc.id, ...(doc.data() as any) }));
+      setMessages(arr);
+    });
+    return () => unsub();
+  }, [db, basePath]);
+
+  const send = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const t = text.trim();
+    if (!t) return;
+    try {
+      await addDoc(collection(db, `${basePath}/chat/messages`), {
+        uid: userId,
+        email: userEmail || null,
+        text: t,
+        createdAt: serverTimestamp(),
+      });
+      setText('');
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  return (
+    <div className="max-w-3xl mx-auto bg-gray-800 p-4 rounded-lg">
+      <h3 className="text-lg font-semibold mb-3">Crew Chat</h3>
+      <div className="h-64 overflow-y-auto bg-gray-900 rounded-md p-3 space-y-2 border border-gray-700">
+        {messages.length === 0 && <div className="text-gray-500">No messages yet. Say hi!</div>}
+        {messages.map(m => (
+          <div key={m.id} className="text-sm">
+            <span className="text-blue-300">{m.email || m.uid.slice(0,6)}</span>
+            <span className="text-gray-400">: </span>
+            <span className="text-gray-100 whitespace-pre-wrap">{m.text}</span>
+          </div>
+        ))}
+      </div>
+      <form onSubmit={send} className="mt-3 flex gap-2">
+        <input value={text} onChange={e => setText(e.target.value)} placeholder="Type a message…" className="flex-1 p-2 bg-gray-700 border border-gray-600 rounded-md text-white" />
+        <button className="py-2 px-4 bg-blue-600 hover:bg-blue-700 rounded-md">Send</button>
+      </form>
     </div>
   );
 }
@@ -958,6 +1061,9 @@ function ScheduleBoard({ schedule, djs, onDjClick, onDragStart, onDragOver, onDr
         <Calendar className="w-6 h-6 mr-3 text-blue-400" />
         {schedule.name} Set Times
       </h2>
+      <p className="text-xs text-gray-400 mb-4">
+        Tips: Drag to swap. Hold Shift while dropping to fill all slots in the range. Hold Alt to overlap into a slot without replacing.
+      </p>
       <div className="space-y-4">
         {schedule.timeSlots.map((slot, index) => (
           <div key={index}>
@@ -1044,6 +1150,16 @@ function TimeSlot({ slot, slotIndex, allDjs, onDjClick, onDragStart, onDragOver,
         ) : (
           <div className="text-center text-gray-500 p-3 border border-dashed border-gray-600 rounded-md">
             Empty Slot
+          </div>
+        )}
+        {/* Guests */}
+        {slot.guests && slot.guests.length > 0 && (
+          <div className="mt-2 flex flex-wrap gap-2">
+            {slot.guests.map(g => (
+              <span key={g.djId} className="text-xs bg-gray-900 border border-gray-600 rounded px-2 py-1 text-gray-200">
+                + {g.djName}
+              </span>
+            ))}
           </div>
         )}
       </div>

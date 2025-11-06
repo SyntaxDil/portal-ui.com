@@ -18,7 +18,8 @@ const targets = {
         remote: '/public_html/Sites/JackedDnb',
     },
     templedjs: {
-        local: './Sites/TempleDjSpot/site',
+        // Built Vite output lives in root Spaces/TempleDjs per vite.config.ts
+        local: './Spaces/TempleDjs',
         remote: '/public_html/Spaces/TempleDjs',
     },
     templedjs_backbones: {
