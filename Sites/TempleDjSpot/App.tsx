@@ -19,6 +19,7 @@ import {
   onSnapshot,
   addDoc,
   query,
+  arrayUnion,
 } from 'firebase/firestore';
 import {
   Users,
@@ -82,6 +83,8 @@ export default function App() {
   const [schedule, setSchedule] = useState<Schedule | null>(null); // The main stage schedule
   const [selectedDj, setSelectedDj] = useState<DJ | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [userEmail, setUserEmail] = useState<string | null>(null);
   
   // UI State
   const [isLoading, setIsLoading] = useState(false);
@@ -101,6 +104,7 @@ export default function App() {
       const unsubscribe = onAuthStateChanged(authInstance, async (user) => {
         if (user) {
           setUserId(user.uid);
+          setUserEmail(user.email || null);
           setIsAuthReady(true);
           return;
         }
@@ -174,15 +178,26 @@ export default function App() {
 
     // Ensure a crew meta doc exists for this app/user
     const metaRef = doc(db, `${baseUserPath}/meta/app`);
-    setDoc(metaRef, { ownerUid: userId, appId, createdAt: new Date().toISOString() }, { merge: true }).catch((e) => {
+    setDoc(metaRef, { ownerUid: userId, appId, createdAt: new Date().toISOString(), allowedAdminEmails: [], allowedAdminUids: [] }, { merge: true }).catch((e) => {
       console.warn('Could not ensure crew meta doc', e);
+    });
+
+    // Listen for meta updates to compute admin
+    const unsubMeta = onSnapshot(metaRef, (snap) => {
+      const data = snap.data() as any;
+      const ownerUid = data?.ownerUid;
+      const emails: string[] = data?.allowedAdminEmails || [];
+      const uids: string[] = data?.allowedAdminUids || [];
+      const meIsAdmin = ownerUid === userId || (!!userEmail && emails.includes(userEmail)) || uids.includes(userId);
+      setIsAdmin(meIsAdmin);
     });
 
     return () => {
       unsubscribeDjs();
       unsubscribeSchedule();
+      unsubMeta && unsubMeta();
     };
-  }, [isAuthReady, db, userId]);
+  }, [isAuthReady, db, userId, userEmail]);
 
   // --- Event Handlers ---
 
@@ -344,9 +359,14 @@ export default function App() {
           Doof Crew Admin
         </h1>
         {userId && (
-          <p className="text-center text-sm text-gray-400 mt-2">
-            Share this User ID with your crew: <code className="bg-gray-700 p-1 rounded-md">{userId}</code>
-          </p>
+          <div className="text-center text-sm text-gray-400 mt-2 flex flex-col items-center gap-1">
+            <p>
+              Share this User ID with your crew: <code className="bg-gray-700 p-1 rounded-md">{userId}</code>
+            </p>
+            {isAdmin && (
+              <span className="inline-flex items-center px-2 py-0.5 rounded bg-green-800 text-green-200 text-xs uppercase tracking-wide">Admin</span>
+            )}
+          </div>
         )}
       </header>
       
@@ -403,6 +423,14 @@ export default function App() {
         </section>
         
       </main>
+
+      {/* --- Admin Settings (if admin) --- */}
+      {isAdmin && (
+        <div className="mb-6 mx-auto max-w-2xl bg-gray-800 p-4 rounded-lg">
+          <h3 className="text-lg font-semibold mb-3">Admin Settings</h3>
+          <AdminSettings db={db!} userId={userId!} appId={appId} />
+        </div>
+      )}
 
       {/* --- DJ Info Modal --- */}
       {modalOpen && selectedDj && (
@@ -720,6 +748,66 @@ function InlineRegister({ auth, db, appId }: { auth: ReturnType<typeof getAuth> 
         <button disabled={loading} type="submit" className="py-2 px-4 bg-blue-600 hover:bg-blue-700 rounded-md">{loading ? 'Registering…' : 'Create account'}</button>
       </div>
     </form>
+  );
+}
+
+/** Admin Settings: add admin email or UID to allow list */
+function AdminSettings({ db, userId, appId }: { db: ReturnType<typeof getFirestore>; userId: string; appId: string }) {
+  const [email, setEmail] = useState('');
+  const [uid, setUid] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [status, setStatus] = useState<string | null>(null);
+
+  const baseUserPath = `users/${userId}/apps/${appId}`;
+  const metaRef = doc(db, `${baseUserPath}/meta/app`);
+
+  const addEmail = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!email) return;
+    setSaving(true); setStatus(null);
+    try {
+      await updateDoc(metaRef, { allowedAdminEmails: arrayUnion(email.trim().toLowerCase()) });
+      setStatus('Admin email added.');
+      setEmail('');
+    } catch (err) {
+      console.error(err); setStatus('Failed to add email.');
+    } finally { setSaving(false); }
+  };
+
+  const addUid = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!uid) return;
+    setSaving(true); setStatus(null);
+    try {
+      await updateDoc(metaRef, { allowedAdminUids: arrayUnion(uid.trim()) });
+      setStatus('Admin UID added.');
+      setUid('');
+    } catch (err) {
+      console.error(err); setStatus('Failed to add UID.');
+    } finally { setSaving(false); }
+  };
+
+  return (
+    <div className="space-y-3">
+      <form onSubmit={addEmail} className="flex items-end gap-2">
+        <div className="flex-1">
+          <label className="block text-sm text-gray-300">Add admin by email</label>
+          <input value={email} onChange={e => setEmail(e.target.value)} type="email" placeholder="crew@example.com" className="w-full mt-1 p-2 bg-gray-700 border border-gray-600 rounded-md text-white" />
+        </div>
+        <button disabled={saving || !email} className="py-2 px-3 bg-blue-600 hover:bg-blue-700 rounded-md">Add</button>
+      </form>
+
+      <form onSubmit={addUid} className="flex items-end gap-2">
+        <div className="flex-1">
+          <label className="block text-sm text-gray-300">Add admin by UID</label>
+          <input value={uid} onChange={e => setUid(e.target.value)} type="text" placeholder="Paste Firebase UID" className="w-full mt-1 p-2 bg-gray-700 border border-gray-600 rounded-md text-white" />
+        </div>
+        <button disabled={saving || !uid} className="py-2 px-3 bg-blue-600 hover:bg-blue-700 rounded-md">Add</button>
+      </form>
+
+      {status && <div className="text-sm text-gray-300">{status}</div>}
+      <div className="text-xs text-gray-400">Tip: Ask the user to copy their UID from the header or provide their account email.</div>
+    </div>
   );
 }
 
