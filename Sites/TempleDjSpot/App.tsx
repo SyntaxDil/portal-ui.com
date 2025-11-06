@@ -72,6 +72,11 @@ interface Schedule {
 
 // --- Main Application Component ---
 export default function App() {
+  // Shared mode: use a global namespace so any signed-in user edits the same schedule
+  // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+  // @ts-ignore
+  const sharedMode: boolean = typeof __shared_mode !== 'undefined' ? !!__shared_mode : true;
+
   // Firebase & Auth State
   const [db, setDb] = useState<ReturnType<typeof getFirestore> | null>(null);
   const [auth, setAuthState] = useState<ReturnType<typeof getAuth> | null>(null);
@@ -125,11 +130,11 @@ export default function App() {
   useEffect(() => {
     if (!isAuthReady || !db || !userId) return;
 
-  // Base path under the authenticated user to align with typical Firestore rules
-  const baseUserPath = `users/${userId}/apps/${appId}`;
+  // Data namespace: shared or per-user
+  const basePath = sharedMode ? `apps/${appId}` : `users/${userId}/apps/${appId}`;
 
   // --- Listener for DJ Collection ---
-  const djsCollectionPath = `${baseUserPath}/djs`;
+  const djsCollectionPath = `${basePath}/djs`;
     const djsQuery = query(collection(db, djsCollectionPath));
     const unsubscribeDjs = onSnapshot(djsQuery, (querySnapshot) => {
       const djsList: DJ[] = [];
@@ -143,7 +148,7 @@ export default function App() {
     });
 
   // --- Listener for Schedule Document ---
-  const scheduleDocPath = `${baseUserPath}/schedule/mainStage`;
+  const scheduleDocPath = `${basePath}/schedule/mainStage`;
     const scheduleRef = doc(db, scheduleDocPath);
 
     const unsubscribeSchedule = onSnapshot(scheduleRef, async (docSnap) => {
@@ -170,7 +175,7 @@ export default function App() {
     });
 
     // Ensure a crew meta doc exists for this app/user
-    const metaRef = doc(db, `${baseUserPath}/meta/app`);
+  const metaRef = doc(db, `${basePath}/meta/app`);
     setDoc(metaRef, { ownerUid: userId, appId, createdAt: new Date().toISOString(), allowedAdminEmails: [], allowedAdminUids: [] }, { merge: true }).catch((e) => {
       console.warn('Could not ensure crew meta doc', e);
     });
@@ -233,7 +238,7 @@ export default function App() {
       const sourceData = JSON.parse(e.dataTransfer.getData('application/json')) as any;
       const newTimeSlots = [...(schedule as Schedule).timeSlots];
       
-  const scheduleRef = doc(db!, `users/${userId}/apps/${appId}/schedule/mainStage`);
+  const scheduleRef = doc(db!, `${sharedMode ? `apps/${appId}` : `users/${userId}/apps/${appId}`}/schedule/mainStage`);
 
       if (sourceData.from === 'pool') {
         // --- Dragging from POOL to SLOT ---
@@ -293,7 +298,7 @@ export default function App() {
          newTimeSlots[sourceSlotIndex] = { ...newTimeSlots[sourceSlotIndex], djId: null, djName: null };
          
          // Update Firestore
-         const scheduleRef = doc(db!, `users/${userId}/apps/${appId}/schedule/mainStage`);
+         const scheduleRef = doc(db!, `${sharedMode ? `apps/${appId}` : `users/${userId}/apps/${appId}`}/schedule/mainStage`);
          await updateDoc(scheduleRef, { timeSlots: newTimeSlots });
       }
       // If dragging from pool, do nothing
@@ -447,7 +452,7 @@ export default function App() {
       </main>
 
       {/* --- Admin Settings (if admin) --- */}
-      {isAdmin && (
+      {isAdmin && !sharedMode && (
         <div className="mb-6 mx-auto max-w-2xl bg-gray-800 p-4 rounded-lg">
           <h3 className="text-lg font-semibold mb-3">Admin Settings</h3>
           <AdminSettings db={db!} userId={userId!} appId={appId} />
@@ -500,6 +505,9 @@ function DJRegistrationForm({ db, userId, appId, setIsLoading, setError, disable
   setError: (v: string | null) => void;
   disabled: boolean;
 }) {
+  // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+  // @ts-ignore
+  const sharedMode: boolean = typeof __shared_mode !== 'undefined' ? !!__shared_mode : true;
   const [formData, setFormData] = useState({
     djName: '',
     realName: '',
@@ -524,7 +532,7 @@ function DJRegistrationForm({ db, userId, appId, setIsLoading, setError, disable
     setError(null);
     
     try {
-  const djsCollectionPath = `users/${userId}/apps/${appId}/djs`;
+  const djsCollectionPath = `${sharedMode ? `apps/${appId}` : `users/${userId}/apps/${appId}`}/djs`;
       await addDoc(collection(db, djsCollectionPath), {
         ...formData,
         createdAt: new Date().toISOString()
