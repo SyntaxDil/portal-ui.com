@@ -1,5 +1,7 @@
 ![alt text](image.png)# Portal UI Website - GoDaddy Hosting Guide
 
+> Important deployment note (Agent Handover): This project’s live apps are deployed via GitHub Pages (static) and use Firebase for Auth/Firestore. Do NOT use GoDaddy FTP for Temple DJ Spot or Hub. The Ops Agent writes this profile under `apps/{appId}/ops/meta/deployment` and a handover note under `apps/{appId}/ops/meta/handover` so future teammates/agents always see it in the dashboard.
+
 Professional website with Registration landing page, configured for deployment to GoDaddy hosting.
 
 ## 🌐 Project Overview

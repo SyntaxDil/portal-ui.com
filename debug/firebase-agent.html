@@ -27,6 +27,25 @@
     </div>
 
     <div class="card">
+      <h3>Deployment & Handover</h3>
+      <div class="grid">
+        <div>
+          <h4 style="margin:0 0 6px 0;">Deployment Profile</h4>
+          <div id="deployProfile" class="mono" style="white-space:pre-wrap"></div>
+        </div>
+        <div>
+          <h4 style="margin:0 0 6px 0;">Handover Note</h4>
+          <div style="display:flex;gap:8px;align-items:flex-start;">
+            <textarea id="handoverText" rows="4" style="flex:1;background:#0b1220;color:#e5e7eb;border:1px solid #1f2937;border-radius:8px;padding:8px;"></textarea>
+            <button id="saveHandover">Save</button>
+          </div>
+          <div id="handoverStatus" class="mono" style="margin-top:6px;opacity:.8;"></div>
+        </div>
+      </div>
+      <p style="margin-top:8px;opacity:.9;">Critical: This project deploys via <strong>GitHub Pages (static)</strong> with <strong>Firebase</strong> for Auth/Firestore. <u>Do not use GoDaddy FTP</u> for these apps.</p>
+    </div>
+
+    <div class="card">
       <div id="authOut">Checking auth…</div>
     </div>
 
@@ -40,7 +59,7 @@
     import FirebaseOpsAgent from '/js/firebase-agent.js';
     import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.13.2/firebase-app.js';
     import { getAuth, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.13.2/firebase-auth.js';
-    import { getFirestore, collection, query, orderBy, limit, onSnapshot } from 'https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore.js';
+  import { getFirestore, collection, query, orderBy, limit, onSnapshot, doc, getDoc } from 'https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore.js';
 
     // Initialize agent (singleton is placed on window), but import ensures module is loaded
     const agent = window.firebaseOpsAgent || new FirebaseOpsAgent();
@@ -75,6 +94,44 @@
         el.innerHTML = `<div class="mono" style="opacity:.8;">${new Date(d.when || Date.now()).toLocaleString()} · ${d.level || 'info'} · ${d.type || ''}</div><pre class="mono" style="white-space:pre-wrap">${JSON.stringify(d, null, 2)}</pre>`;
         eventsDiv.appendChild(el);
       });
+    });
+
+    // Load deployment profile + handover note
+    async function loadMeta() {
+      const profRef = doc(db, `apps/${appId}/ops/meta/deployment`);
+      const handRef = doc(db, `apps/${appId}/ops/meta/handover`);
+      try {
+        const [pSnap, hSnap] = await Promise.all([getDoc(profRef), getDoc(handRef)]);
+        const dp = document.getElementById('deployProfile');
+        if (pSnap.exists()) {
+          const d = pSnap.data();
+          dp.textContent = JSON.stringify(d, null, 2);
+        } else {
+          dp.textContent = '{ "method": "github-pages + firebase" }';
+        }
+        const hTxt = document.getElementById('handoverText');
+        if (hSnap.exists()) {
+          hTxt.value = String(hSnap.data()?.text || '');
+        } else {
+          hTxt.value = 'Deploy via GitHub Pages (static). Backend: Firebase (Auth/Firestore). Do NOT use GoDaddy FTP.';
+        }
+      } catch (e) {
+        document.getElementById('deployProfile').textContent = 'Failed to load profile.';
+      }
+    }
+    loadMeta();
+
+    // Save handover note
+    document.getElementById('saveHandover').addEventListener('click', async () => {
+      const txt = document.getElementById('handoverText').value;
+      const st = document.getElementById('handoverStatus');
+      try {
+        await agent.writeHandoverNote(txt);
+        st.textContent = 'Saved.';
+        setTimeout(() => { st.textContent = ''; }, 1200);
+      } catch (e) {
+        st.textContent = 'Failed to save.';
+      }
     });
   </script>
 </body>

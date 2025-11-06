@@ -6,7 +6,7 @@
 
 import { initializeApp, getApps, getApp } from 'https://www.gstatic.com/firebasejs/10.13.2/firebase-app.js';
 import { getAuth, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.13.2/firebase-auth.js';
-import { getFirestore, doc, setDoc, addDoc, collection, serverTimestamp } from 'https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore.js';
+import { getFirestore, doc, setDoc, addDoc, collection, serverTimestamp, getDoc } from 'https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore.js';
 
 class FirebaseOpsAgent {
   constructor(options = {}) {
@@ -21,6 +21,7 @@ class FirebaseOpsAgent {
     this.db = getFirestore(app);
     this.queueKey = `ops_agent_queue_${this.appId}`;
     this.enabled = true;
+  this._deploymentUpserted = false;
 
     // Retry queued events when auth state changes or on init
     onAuthStateChanged(this.auth, () => this.flushQueue());
@@ -34,6 +35,15 @@ class FirebaseOpsAgent {
       const reason = e.reason || {};
       this.log({ type: 'unhandledrejection', message: reason.message || String(reason), stack: reason.stack || null });
     });
+
+    // Default deployment profile: GitHub Pages (static) + Firebase (Auth/Firestore)
+    // This is a critical handover note to avoid using GoDaddy FTP for deploys.
+    this.upsertDeploymentProfile({
+      method: 'github-pages + firebase',
+      notes: 'Static site builds are deployed via GitHub pushes (GitHub Pages). Backend uses Firebase (Auth + Firestore). Do NOT use GoDaddy FTP for deploys.',
+      repository: (typeof window !== 'undefined' && window.location && window.location.host) ? `https://${window.location.host}` : null,
+      updatedAt: Date.now(),
+    }).catch(() => {});
   }
 
   _ns() {
@@ -51,6 +61,36 @@ class FirebaseOpsAgent {
     } catch (e) {
       this._enqueue({ when: Date.now(), ns: this._ns(), level: 'error', type: 'agent.health.error', error: { code: e.code, message: e.message } });
       return { ok: false, code: e.code, message: e.message };
+    }
+  }
+
+  async upsertDeploymentProfile(profile) {
+    if (!this.enabled) return;
+    try {
+      const metaRef = doc(this.db, `${this._ns()}/ops/meta/deployment`);
+      // Merge with existing to avoid clobbering manual edits
+      await setDoc(metaRef, {
+        method: profile?.method || 'github-pages + firebase',
+        notes: profile?.notes || '',
+        repository: profile?.repository || null,
+        updatedAt: serverTimestamp(),
+      }, { merge: true });
+      this._deploymentUpserted = true;
+      await this.log({ type: 'deployment.profile.updated', level: 'info', method: profile?.method });
+    } catch (e) {
+      // Non-fatal; queue info
+      this._enqueue({ when: Date.now(), ns: this._ns(), level: 'warn', type: 'deployment.profile.update.failed', error: { code: e.code, message: e.message } });
+    }
+  }
+
+  async writeHandoverNote(text) {
+    if (!this.enabled) return;
+    try {
+      const metaRef = doc(this.db, `${this._ns()}/ops/meta/handover`);
+      await setDoc(metaRef, { text: String(text || ''), updatedAt: serverTimestamp() }, { merge: true });
+      await this.log({ type: 'handover.note.updated', level: 'info' });
+    } catch (e) {
+      this._enqueue({ when: Date.now(), ns: this._ns(), level: 'warn', type: 'handover.note.update.failed', error: { code: e.code, message: e.message } });
     }
   }
 
