@@ -118,6 +118,7 @@
                             <option value="templedjspot">TempleDjSpot</option>
                             <option value="other">Other</option>
                         </select>
+                        <small style="display:block;margin-top:8px;color:#666;">Quick links: <span id="serviceLinks"></span></small>
                     </div>
 
                     <!-- Terms and Conditions -->
@@ -187,5 +188,33 @@
             }
         });
     </script>
+        <script>
+            // Service helper: preselect by ?site=... and render quick links
+            document.addEventListener('DOMContentLoaded', () => {
+                const select = document.getElementById('serviceType');
+                const linksEl = document.getElementById('serviceLinks');
+                const services = [
+                    { value: 'dropfm', label: 'DropFm', url: '/Sites/DropHub/' },
+                    { value: 'jackeddnb', label: 'JackedDnb', url: '/Sites/JackedDnb/' },
+                    { value: 'kaitaiki-recordings', label: 'Kaitaiki Recordings', url: '/Sites/KaitaikiRedirect/' },
+                    { value: 'soundwave', label: 'SoundWave', url: '/Sites/soundwave---a-crowd-sourced-artist-platform/' },
+                    { value: 'templedjspot', label: 'TempleDjSpot', url: '/Spaces/TempleDjs/' }
+                ];
+
+                        try {
+                            const siteParam = new URLSearchParams(window.location.search).get('site');
+                            if (siteParam && select) {
+                                const exists = Array.from(select.options).some(o => o.value === siteParam);
+                                if (exists) select.value = siteParam;
+                            }
+                        } catch (_) {}
+
+                if (linksEl) {
+                    linksEl.innerHTML = services
+                        .map(s => `<a href="${s.url}" target="_blank" rel="noopener">${s.label}</a>`)
+                        .join(' · ');
+                }
+            });
+        </script>
 </body>
 </html>
