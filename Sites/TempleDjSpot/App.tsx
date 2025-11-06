@@ -101,6 +101,10 @@ export default function App() {
   const [error, setError] = useState<string | null>(null);
   const [loadFailed, setLoadFailed] = useState(false);
   const [dragCounter, setDragCounter] = useState(0); // For styling drop zones
+  // Range-drag state to allow dragging across multiple 15-min slots
+  const [rangeStart, setRangeStart] = useState<number | null>(null);
+  const [rangeEnd, setRangeEnd] = useState<number | null>(null);
+  const [dragSource, setDragSource] = useState<any | null>(null);
 
   // --- Firebase Initialization and Auth ---
   useEffect(() => {
@@ -221,9 +225,13 @@ export default function App() {
     setSelectedDj(null);
   };
 
-  const handleDragStart = (e: React.DragEvent, dragData: unknown) => {
+  const handleDragStart = (e: React.DragEvent, dragData: any) => {
     e.dataTransfer.setData('application/json', JSON.stringify(dragData));
     e.dataTransfer.effectAllowed = 'move';
+    // Keep a local copy so we can compute ranges while dragging
+    setDragSource(dragData);
+    setRangeStart(null);
+    setRangeEnd(null);
   };
   
   const handleDragOver = (e: React.DragEvent) => {
@@ -234,6 +242,23 @@ export default function App() {
   const handleDragEnter = (e: React.DragEvent) => {
     e.preventDefault();
     setDragCounter(prev => prev + 1);
+  };
+  
+  // Slot-aware drag enter: build a range from initial to current slot
+  const handleDragEnterSlot = (e: React.DragEvent, slotIndex: number) => {
+    e.preventDefault();
+    setDragCounter(prev => prev + 1);
+    setRangeStart(prev => {
+      if (prev === null) {
+        // If dragging from a slot, start from that source slot; otherwise start from first hovered slot
+        if (dragSource && dragSource.from === 'slot' && typeof dragSource.slotIndex === 'number') {
+          return dragSource.slotIndex;
+        }
+        return slotIndex;
+      }
+      return prev;
+    });
+    setRangeEnd(slotIndex);
   };
   
   const handleDragLeave = (e: React.DragEvent) => {
@@ -252,7 +277,32 @@ export default function App() {
       
   const scheduleRef = doc(db!, `${sharedMode ? `apps/${appId}` : `users/${userId}/apps/${appId}`}/schedule/mainStage`);
 
-      if (sourceData.from === 'pool') {
+      // If a range was dragged across, apply to entire range
+      const hasRange = rangeStart !== null && rangeEnd !== null;
+      const applyRangeAssign = (assignAsGuest: boolean) => {
+        const start = Math.min(rangeStart!, targetSlotIndex, rangeEnd!);
+        const end = Math.max(rangeStart!, targetSlotIndex, rangeEnd!);
+        const djId = sourceData.from === 'pool' ? sourceData.dj.id : sourceData.djId;
+        const djName = sourceData.from === 'pool' ? sourceData.dj.djName : sourceData.djName;
+        for (let i = start; i <= end; i++) {
+          const target = { ...newTimeSlots[i] };
+          if (assignAsGuest) {
+            if (target.djId && target.djId !== djId) {
+              const guests = Array.isArray(target.guests) ? [...target.guests] : [];
+              if (!guests.find(g => g.djId === djId)) guests.push({ djId, djName });
+              newTimeSlots[i] = { ...target, guests };
+            } else {
+              newTimeSlots[i] = { ...target, djId, djName };
+            }
+          } else {
+            newTimeSlots[i] = { ...target, djId, djName };
+          }
+        }
+      };
+
+      if (hasRange) {
+        applyRangeAssign(e.altKey);
+      } else if (sourceData.from === 'pool') {
         // --- Dragging from POOL to SLOT ---
         const djId = sourceData.dj.id as string;
         const djName = sourceData.dj.djName as string;
@@ -322,6 +372,10 @@ export default function App() {
       setError('Failed to update schedule.');
     } finally {
       setIsLoading(false);
+      // Reset range-drag state after drop
+      setRangeStart(null);
+      setRangeEnd(null);
+      setDragSource(null);
     }
   };
   
@@ -497,10 +551,12 @@ export default function App() {
             onDragStart={handleDragStart}
             onDragOver={handleDragOver}
             onDragEnter={handleDragEnter}
+            onDragEnterSlot={handleDragEnterSlot}
             onDragLeave={handleDragLeave}
             onDrop={handleDropOnSlot}
             isDropZoneActive={dragCounter > 0}
             disabled={isLoading}
+            activeRange={rangeStart !== null ? { start: Math.min(rangeStart, rangeEnd ?? rangeStart), end: Math.max(rangeStart, rangeEnd ?? rangeStart) } : null}
           />
         </section>
         
@@ -1043,17 +1099,19 @@ function DJPool({ djs, onDjClick, onDragStart, onDragOver, onDragEnter, onDragLe
 /**
  * Schedule Board
  */
-function ScheduleBoard({ schedule, djs, onDjClick, onDragStart, onDragOver, onDragEnter, onDragLeave, onDrop, isDropZoneActive, disabled }: {
+function ScheduleBoard({ schedule, djs, onDjClick, onDragStart, onDragOver, onDragEnter, onDragEnterSlot, onDragLeave, onDrop, isDropZoneActive, disabled, activeRange }: {
   schedule: Schedule;
   djs: DJ[];
   onDjClick: (dj: DJ) => void;
   onDragStart: (e: React.DragEvent, data: unknown) => void;
   onDragOver: (e: React.DragEvent) => void;
   onDragEnter: (e: React.DragEvent) => void;
+  onDragEnterSlot: (e: React.DragEvent, slotIndex: number) => void;
   onDragLeave: (e: React.DragEvent) => void;
   onDrop: (e: React.DragEvent, slotIndex: number) => void;
   isDropZoneActive: boolean;
   disabled: boolean;
+  activeRange: { start: number; end: number } | null;
 }) {
   return (
     <div className="bg-gray-800 p-6 rounded-lg shadow-lg">
@@ -1075,9 +1133,11 @@ function ScheduleBoard({ schedule, djs, onDjClick, onDragStart, onDragOver, onDr
               onDragStart={onDragStart}
               onDragOver={onDragOver}
               onDragEnter={onDragEnter}
+              onDragEnterSlot={onDragEnterSlot}
               onDragLeave={onDragLeave}
               onDrop={onDrop}
               disabled={disabled}
+              activeRange={activeRange}
             />
           </div>
         ))}
@@ -1089,7 +1149,7 @@ function ScheduleBoard({ schedule, djs, onDjClick, onDragStart, onDragOver, onDr
 /**
  * Individual Time Slot
  */
-function TimeSlot({ slot, slotIndex, allDjs, onDjClick, onDragStart, onDragOver, onDragEnter, onDragLeave, onDrop, disabled }: {
+function TimeSlot({ slot, slotIndex, allDjs, onDjClick, onDragStart, onDragOver, onDragEnter, onDragEnterSlot, onDragLeave, onDrop, disabled, activeRange }: {
   slot: TimeSlot;
   slotIndex: number;
   allDjs: DJ[];
@@ -1097,18 +1157,22 @@ function TimeSlot({ slot, slotIndex, allDjs, onDjClick, onDragStart, onDragOver,
   onDragStart: (e: React.DragEvent, data: unknown) => void;
   onDragOver: (e: React.DragEvent) => void;
   onDragEnter: (e: React.DragEvent) => void;
+  onDragEnterSlot: (e: React.DragEvent, slotIndex: number) => void;
   onDragLeave: (e: React.DragEvent) => void;
   onDrop: (e: React.DragEvent, slotIndex: number) => void;
   disabled: boolean;
+  activeRange: { start: number; end: number } | null;
 }) {
   const [isDragOver, setIsDragOver] = useState(false);
   const dj = slot.djId ? allDjs.find(d => d.id === slot.djId) || null : null;
+  const inActiveRange = activeRange ? (slotIndex >= activeRange.start && slotIndex <= activeRange.end) : false;
   
   const handleSlotDragEnter = (e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
     setIsDragOver(true);
-    onDragEnter(e); // Notify parent
+    onDragEnter(e); // generic enter (kept for counter)
+    onDragEnterSlot(e, slotIndex); // range-aware enter
   };
   
   const handleSlotDragLeave = (e: React.DragEvent) => {
@@ -1128,7 +1192,7 @@ function TimeSlot({ slot, slotIndex, allDjs, onDjClick, onDragStart, onDragOver,
   return (
     <div 
       className={`flex items-center bg-gray-700 rounded-lg p-3 transition-all duration-200 ${
-        isDragOver ? 'ring-2 ring-blue-500 bg-gray-600' : ''
+        (isDragOver || inActiveRange) ? 'ring-2 ring-blue-500 bg-gray-600' : ''
       }`}
       onDragOver={onDragOver}
       onDragEnter={handleSlotDragEnter}
