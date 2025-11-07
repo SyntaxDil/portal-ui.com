@@ -435,13 +435,18 @@ export default function App() {
       const newTimeSlots = (schedule as Schedule).timeSlots.map(slot => ({
         time: slot.time,
         djId: null,
-        djName: null,
-        guests: undefined
+        djName: null
       }));
       await updateDoc(scheduleRef, { timeSlots: newTimeSlots });
     } catch (err) {
       console.error('Error resetting schedule:', err);
-      setError('Failed to reset schedule.');
+      const code = (err as any)?.code || '';
+      if (code.includes('permission') || code.includes('denied')) {
+        setError('Failed to reset schedule (permission denied). Please verify you have write access.');
+      } else {
+        setError('Failed to reset schedule: ' + ((err as any)?.message || 'Unknown error'));
+      }
+      try { (window as any).firebaseOpsAgent?.log({ level: 'error', type: 'schedule.reset.error', code, message: (err as any)?.message || '' }); } catch (_) {}
     } finally {
       setIsLoading(false);
     }
