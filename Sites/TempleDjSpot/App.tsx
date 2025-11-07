@@ -53,6 +53,8 @@ const firebaseConfig = typeof __firebase_config !== 'undefined'
 const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-doof-crew';
 
 // --- Types ---
+type InviteStatus = 'invited' | 'pending' | 'declined' | 'confirmed';
+
 interface DJ {
   id?: string;
   djName: string;
@@ -60,6 +62,12 @@ interface DJ {
   info?: string;
   photoUrl?: string;
   visualUrl?: string;
+  inviteStatus?: InviteStatus;
+  invitedAt?: string; // ISO timestamp
+  confirmedAt?: string; // ISO timestamp
+  uid?: string; // Firebase auth UID when confirmed
+  email?: string;
+  createdBy?: string;
 }
 
 interface TimeSlot {
@@ -207,9 +215,9 @@ export default function App() {
     });
   };
 
-  const unsubscribeMainStage = setupStageListener('Main Stage', 'mainStage', setSchedule);
-  const unsubscribeDubPub = setupStageListener('Dub Pub', 'dubPub', setDubPubSchedule);
-  const unsubscribeTechnoHub = setupStageListener('Techno Hub', 'technoHub', setTechnoHubSchedule);
+  const unsubscribeMainStage = setupStageListener('Temple', 'mainStage', setSchedule);
+  const unsubscribeDubPub = setupStageListener('Dub', 'dubPub', setDubPubSchedule);
+  const unsubscribeTechnoHub = setupStageListener('Techno', 'technoHub', setTechnoHubSchedule);
 
     // Ensure a crew meta doc exists for this app/user
   const metaRef = doc(db, `${basePath}/meta/app`);
@@ -679,8 +687,9 @@ export default function App() {
       {/* --- Header --- */}
       <header className="mb-6">
         <h1 className="text-4xl font-bold text-center text-blue-400">
-          Doof Crew Admin
+          🎧 DoofDJs
         </h1>
+        <p className="text-center text-gray-400 text-sm mt-1">Festival DJ Scheduling System</p>
         {userId && (
           <div className="text-center text-sm text-gray-400 mt-2 flex flex-col items-center gap-1">
             <p>
@@ -771,7 +780,7 @@ export default function App() {
                       : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
                   }`}
                 >
-                  🎵 Main Stage
+                  �️ Temple
                 </button>
                 <button
                   onClick={() => setCurrentStage('dubPub')}
@@ -781,7 +790,7 @@ export default function App() {
                       : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
                   }`}
                 >
-                  🎧 Dub Pub
+                  � Dub
                 </button>
                 <button
                   onClick={() => setCurrentStage('technoHub')}
@@ -791,7 +800,7 @@ export default function App() {
                       : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
                   }`}
                 >
-                  ⚡ Techno Hub
+                  ⚡ Techno
                 </button>
               </div>
             )}
@@ -977,8 +986,8 @@ function SharedChat({ db, userId, appId, sharedMode, userEmail }: { db: ReturnTy
 
 // --- Helpers ---
 
-function buildTempleBaseSchedule(stageName: string = 'Main Stage'): Schedule {
-  const name = `Temple ${stageName} - 31 Jan - 1 Feb 2025`;
+function buildTempleBaseSchedule(stageName: string = 'Temple'): Schedule {
+  const name = `DoofDJs ${stageName} - 31 Jan - 1 Feb 2025`;
   // Jan 31 00:00 to Feb 1 16:00 in 15-minute blocks (40 hours)
   const startMinutes = 0; // 00:00 Jan 31
   const endMinutes = (24 + 16) * 60; // 16:00 Feb 1 (40 hours total)
@@ -1045,6 +1054,8 @@ function DJRegistrationForm({ db, userId, appId, setIsLoading, setError, disable
       await addDoc(collection(db, djsCollectionPath), {
         ...formData,
         createdAt: new Date().toISOString(),
+        inviteStatus: 'invited' as InviteStatus,
+        invitedAt: new Date().toISOString(),
         // Store creator's UID/email so they can claim this profile later
         createdBy: userId,
         // Leave uid/email empty until DJ claims the profile by signing up
@@ -1746,7 +1757,22 @@ function DJItem({ dj, onClick, isDraggable, onDragStart, showInvite, assignedSlo
         className="w-10 h-10 rounded-full object-cover mr-3 flex-shrink-0"
       />
       <div className="flex-grow min-w-0" onClick={onClick}>
-        <p className="text-md font-semibold text-white truncate">{dj.djName}</p>
+        <div className="flex items-center gap-2">
+          <p className="text-md font-semibold text-white truncate">{dj.djName}</p>
+          {dj.inviteStatus && (
+            <span className={`text-xs px-2 py-0.5 rounded font-medium ${
+              dj.inviteStatus === 'confirmed' ? 'bg-green-700 text-green-100' :
+              dj.inviteStatus === 'pending' ? 'bg-yellow-700 text-yellow-100' :
+              dj.inviteStatus === 'declined' ? 'bg-red-700 text-red-100' :
+              'bg-gray-700 text-gray-300'
+            }`}>
+              {dj.inviteStatus === 'confirmed' ? '✓ Confirmed' :
+               dj.inviteStatus === 'pending' ? '⏳ Pending' :
+               dj.inviteStatus === 'declined' ? '✗ Declined' :
+               '📧 Invited'}
+            </span>
+          )}
+        </div>
         <p className="text-sm text-gray-400 truncate">{dj.realName}</p>
       </div>
       {showInvite && (
@@ -1837,6 +1863,34 @@ function DJModal({ dj, onClose }: { dj: DJ; onClose: () => void }) {
                 </a>
              </div>
           )}
+          
+          {/* Invitation Status */}
+          <div className="bg-gray-700 p-4 rounded-lg">
+            <h3 className="text-sm font-semibold text-gray-400 mb-2">Invitation Status</h3>
+            <div className="flex items-center gap-2">
+              <span className={`text-sm px-3 py-1.5 rounded font-medium ${
+                dj.inviteStatus === 'confirmed' ? 'bg-green-700 text-green-100' :
+                dj.inviteStatus === 'pending' ? 'bg-yellow-700 text-yellow-100' :
+                dj.inviteStatus === 'declined' ? 'bg-red-700 text-red-100' :
+                'bg-gray-600 text-gray-200'
+              }`}>
+                {dj.inviteStatus === 'confirmed' ? '✓ Confirmed' :
+                 dj.inviteStatus === 'pending' ? '⏳ Pending' :
+                 dj.inviteStatus === 'declined' ? '✗ Declined' :
+                 '📧 Invited'}
+              </span>
+              {dj.confirmedAt && (
+                <span className="text-xs text-gray-400">
+                  • Confirmed {new Date(dj.confirmedAt).toLocaleDateString()}
+                </span>
+              )}
+              {!dj.confirmedAt && dj.invitedAt && (
+                <span className="text-xs text-gray-400">
+                  • Invited {new Date(dj.invitedAt).toLocaleDateString()}
+                </span>
+              )}
+            </div>
+          </div>
         </div>
       </div>
     </div>

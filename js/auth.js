@@ -81,9 +81,11 @@ document.addEventListener('DOMContentLoaded', () => {
             const djDoc = snapshot.docs[0];
             await updateDoc(doc(db, `apps/temple-djs/djs/${djDoc.id}`), {
               uid: cred.user.uid,
-              email: email
+              email: email,
+              inviteStatus: 'confirmed',
+              confirmedAt: new Date().toISOString()
             });
-            console.log('DJ profile linked:', djDoc.id);
+            console.log('DJ profile linked and confirmed:', djDoc.id);
           }
         } catch (linkErr) {
           console.warn('Failed to link DJ profile:', linkErr);
