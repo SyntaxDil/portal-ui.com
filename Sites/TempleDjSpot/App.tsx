@@ -67,13 +67,19 @@ interface TimeSlot {
   djId: string | null;
   djName: string | null;
   // Optional list of additional DJs sharing this slot
-  guests?: Array<{ djId: string; djName: string }>
+  guests?: Array<{ djId: string; djName: string }>;
+  // Merged block properties
+  isMergedStart?: boolean; // First slot in a merged block
+  mergedCount?: number; // Number of slots merged together (only on start slot)
+  mergedWith?: number; // Index of the start slot (only on continuation slots)
 }
 
 interface Schedule {
   name: string;
   timeSlots: TimeSlot[];
 }
+
+type StageType = 'mainStage' | 'dubPub' | 'technoHub';
 
 // --- Main Application Component ---
 export default function App() {
@@ -91,6 +97,8 @@ export default function App() {
   // App Data State
   const [djs, setDjs] = useState<DJ[]>([]); // All registered DJs
   const [schedule, setSchedule] = useState<Schedule | null>(null); // The main stage schedule
+  const [dubPubSchedule, setDubPubSchedule] = useState<Schedule | null>(null);
+  const [technoHubSchedule, setTechnoHubSchedule] = useState<Schedule | null>(null);
   const [selectedDj, setSelectedDj] = useState<DJ | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
@@ -105,6 +113,14 @@ export default function App() {
   const [rangeStart, setRangeStart] = useState<number | null>(null);
   const [rangeEnd, setRangeEnd] = useState<number | null>(null);
   const [dragSource, setDragSource] = useState<any | null>(null);
+  
+  // Multi-stage view
+  const [currentStage, setCurrentStage] = useState<StageType>('mainStage');
+  const [viewMode, setViewMode] = useState<'single' | 'multi'>('single');
+  
+  // Block selection for merging
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedSlots, setSelectedSlots] = useState<number[]>([]);
 
   // --- Firebase Initialization and Auth ---
   useEffect(() => {
@@ -156,39 +172,44 @@ export default function App() {
       setError('Failed to load DJ list.');
     });
 
-  // --- Listener for Schedule Document ---
-  const scheduleDocPath = `${basePath}/schedule/mainStage`;
+  // --- Listener for Schedule Documents (All 3 Stages) ---
+  const setupStageListener = (stageName: string, stagePath: StageType, setter: React.Dispatch<React.SetStateAction<Schedule | null>>) => {
+    const scheduleDocPath = `${basePath}/schedule/${stagePath}`;
     const scheduleRef = doc(db, scheduleDocPath);
 
-  const unsubscribeSchedule = onSnapshot(scheduleRef, async (docSnap) => {
+    return onSnapshot(scheduleRef, async (docSnap) => {
       if (docSnap.exists()) {
-        setSchedule(docSnap.data() as Schedule);
+        setter(docSnap.data() as Schedule);
         setLoadFailed(false);
       } else {
-        // No schedule yet — try to create the Temple base schedule (31 Jan 2025)
         try {
-          const base = buildTempleBaseSchedule();
+          const base = buildTempleBaseSchedule(stageName);
           await setDoc(scheduleRef, base);
-          setSchedule(base);
+          setter(base);
           setLoadFailed(false);
         } catch (err) {
-          console.error('Error creating base schedule:', err);
+          console.error(`Error creating ${stageName} schedule:`, err);
           try { (window as any).firebaseOpsAgent?.log({ level: 'error', type: 'schedule.create.error', code: (err as any)?.code || '', message: (err as any)?.message || '', path: scheduleDocPath }); } catch (_) {}
-          setError('Failed to initialize schedule.');
+          setError(`Failed to initialize ${stageName} schedule.`);
           setLoadFailed(true);
         }
       }
     }, (err: any) => {
-      console.error('Error listening to schedule:', err);
+      console.error(`Error listening to ${stageName} schedule:`, err);
       try { (window as any).firebaseOpsAgent?.log({ level: 'error', type: 'schedule.listen.error', code: (err as any)?.code || '', message: (err as any)?.message || '', path: scheduleDocPath }); } catch (_) {}
       const code = err?.code || '';
       if (code.includes('permission') || code.includes('denied')) {
-        setError(`Failed to load schedule (permission denied). Path: ${scheduleDocPath}`);
+        setError(`Failed to load ${stageName} schedule (permission denied). Path: ${scheduleDocPath}`);
       } else {
-        setError('Failed to load schedule.');
+        setError(`Failed to load ${stageName} schedule.`);
       }
       setLoadFailed(true);
     });
+  };
+
+  const unsubscribeMainStage = setupStageListener('Main Stage', 'mainStage', setSchedule);
+  const unsubscribeDubPub = setupStageListener('Dub Pub', 'dubPub', setDubPubSchedule);
+  const unsubscribeTechnoHub = setupStageListener('Techno Hub', 'technoHub', setTechnoHubSchedule);
 
     // Ensure a crew meta doc exists for this app/user
   const metaRef = doc(db, `${basePath}/meta/app`);
@@ -208,7 +229,9 @@ export default function App() {
 
     return () => {
       unsubscribeDjs();
-      unsubscribeSchedule();
+      unsubscribeMainStage();
+      unsubscribeDubPub();
+      unsubscribeTechnoHub();
       unsubMeta && unsubMeta();
     };
   }, [isAuthReady, db, userId, userEmail]);
@@ -452,6 +475,130 @@ export default function App() {
     }
   };
 
+  // --- Block Selection and Merging ---
+  const handleToggleSelectionMode = () => {
+    setSelectionMode(!selectionMode);
+    setSelectedSlots([]);
+  };
+
+  const handleSlotSelection = (index: number) => {
+    if (!selectionMode) return;
+    
+    if (selectedSlots.includes(index)) {
+      setSelectedSlots(selectedSlots.filter(i => i !== index));
+    } else {
+      setSelectedSlots([...selectedSlots, index].sort((a, b) => a - b));
+    }
+  };
+
+  const handleMergeSlots = async () => {
+    if (selectedSlots.length < 2) {
+      alert('Please select at least 2 adjacent slots to merge.');
+      return;
+    }
+
+    // Check if slots are adjacent
+    for (let i = 0; i < selectedSlots.length - 1; i++) {
+      if (selectedSlots[i + 1] !== selectedSlots[i] + 1) {
+        alert('Please select adjacent slots only.');
+        return;
+      }
+    }
+
+    const currentSchedule = getCurrentSchedule();
+    if (!currentSchedule) return;
+
+    setIsLoading(true);
+    try {
+      const newTimeSlots = [...currentSchedule.timeSlots];
+      const startIndex = selectedSlots[0];
+      
+      // Mark the first slot as merged start
+      newTimeSlots[startIndex] = {
+        ...newTimeSlots[startIndex],
+        isMergedStart: true,
+        mergedCount: selectedSlots.length
+      };
+
+      // Mark continuation slots
+      for (let i = 1; i < selectedSlots.length; i++) {
+        const slotIndex = selectedSlots[i];
+        newTimeSlots[slotIndex] = {
+          ...newTimeSlots[slotIndex],
+          mergedWith: startIndex
+        };
+      }
+
+      await updateSchedule(newTimeSlots);
+      setSelectedSlots([]);
+      setSelectionMode(false);
+    } catch (err) {
+      console.error('Error merging slots:', err);
+      setError('Failed to merge slots.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleUnmergeSlot = async (index: number) => {
+    const currentSchedule = getCurrentSchedule();
+    if (!currentSchedule) return;
+
+    setIsLoading(true);
+    try {
+      const newTimeSlots = [...currentSchedule.timeSlots];
+      const slot = newTimeSlots[index];
+
+      if (slot.isMergedStart && slot.mergedCount) {
+        // Unmerge all slots in this block
+        delete newTimeSlots[index].isMergedStart;
+        delete newTimeSlots[index].mergedCount;
+
+        for (let i = index + 1; i < index + slot.mergedCount; i++) {
+          delete newTimeSlots[i].mergedWith;
+        }
+      } else if (slot.mergedWith !== undefined) {
+        // This is a continuation slot, unmerge the entire block
+        const startIndex = slot.mergedWith;
+        const startSlot = newTimeSlots[startIndex];
+        if (startSlot.mergedCount) {
+          delete newTimeSlots[startIndex].isMergedStart;
+          delete newTimeSlots[startIndex].mergedCount;
+
+          for (let i = startIndex + 1; i < startIndex + startSlot.mergedCount; i++) {
+            delete newTimeSlots[i].mergedWith;
+          }
+        }
+      }
+
+      await updateSchedule(newTimeSlots);
+    } catch (err) {
+      console.error('Error unmerging slot:', err);
+      setError('Failed to unmerge slot.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Helper to get current schedule based on stage/view mode
+  const getCurrentSchedule = (): Schedule | null => {
+    if (viewMode === 'multi') return schedule; // Default to main stage in multi view
+    
+    switch (currentStage) {
+      case 'mainStage': return schedule;
+      case 'dubPub': return dubPubSchedule;
+      case 'technoHub': return technoHubSchedule;
+      default: return schedule;
+    }
+  };
+
+  // Helper to update schedule for current stage
+  const updateSchedule = async (timeSlots: TimeSlot[]) => {
+    const stagePath = currentStage;
+    const scheduleRef = doc(db!, `${sharedMode ? `apps/${appId}` : `users/${userId}/apps/${appId}`}/schedule/${stagePath}`);
+    await updateDoc(scheduleRef, { timeSlots });
+  };
+
   // --- Calculate Unassigned DJs ---
   const assignedDjIds = new Set(
     (schedule?.timeSlots || []).flatMap(slot => [
@@ -588,21 +735,164 @@ export default function App() {
 
         {/* --- Right Column: Schedule Board --- */}
         <section className="w-full lg:w-2/3">
-          <ScheduleBoard 
-            schedule={schedule}
-            djs={djs} // Pass all DJs for lookup
-            onDjClick={handleOpenModal}
-            onDragStart={handleDragStart}
-            onDragOver={handleDragOver}
-            onDragEnter={handleDragEnter}
-            onDragEnterSlot={handleDragEnterSlot}
-            onDragLeave={handleDragLeave}
-            onDrop={handleDropOnSlot}
-            isDropZoneActive={dragCounter > 0}
-            disabled={isLoading}
-            activeRange={rangeStart !== null ? { start: Math.min(rangeStart, rangeEnd ?? rangeStart), end: Math.max(rangeStart, rangeEnd ?? rangeStart) } : null}
-            onReset={handleResetSchedule}
-          />
+          {/* Stage Selector */}
+          <div className="mb-4 flex flex-wrap gap-2">
+            <div className="flex gap-2 items-center">
+              <span className="text-sm text-gray-400">View:</span>
+              <button
+                onClick={() => setViewMode('single')}
+                className={`px-3 py-1.5 rounded text-sm transition-colors ${
+                  viewMode === 'single' 
+                    ? 'bg-blue-600 text-white' 
+                    : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                }`}
+              >
+                Single Stage
+              </button>
+              <button
+                onClick={() => setViewMode('multi')}
+                className={`px-3 py-1.5 rounded text-sm transition-colors ${
+                  viewMode === 'multi' 
+                    ? 'bg-blue-600 text-white' 
+                    : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                }`}
+              >
+                All Stages
+              </button>
+            </div>
+            {viewMode === 'single' && (
+              <div className="flex gap-2 items-center ml-4">
+                <span className="text-sm text-gray-400">Stage:</span>
+                <button
+                  onClick={() => setCurrentStage('mainStage')}
+                  className={`px-3 py-1.5 rounded text-sm transition-colors ${
+                    currentStage === 'mainStage' 
+                      ? 'bg-purple-600 text-white' 
+                      : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                  }`}
+                >
+                  🎵 Main Stage
+                </button>
+                <button
+                  onClick={() => setCurrentStage('dubPub')}
+                  className={`px-3 py-1.5 rounded text-sm transition-colors ${
+                    currentStage === 'dubPub' 
+                      ? 'bg-purple-600 text-white' 
+                      : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                  }`}
+                >
+                  🎧 Dub Pub
+                </button>
+                <button
+                  onClick={() => setCurrentStage('technoHub')}
+                  className={`px-3 py-1.5 rounded text-sm transition-colors ${
+                    currentStage === 'technoHub' 
+                      ? 'bg-purple-600 text-white' 
+                      : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                  }`}
+                >
+                  ⚡ Techno Hub
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* Schedule Display */}
+          {viewMode === 'multi' ? (
+            <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
+              {schedule && (
+                <ScheduleBoard 
+                  schedule={schedule}
+                  djs={djs}
+                  onDjClick={handleOpenModal}
+                  onDragStart={handleDragStart}
+                  onDragOver={handleDragOver}
+                  onDragEnter={handleDragEnter}
+                  onDragEnterSlot={handleDragEnterSlot}
+                  onDragLeave={handleDragLeave}
+                  onDrop={handleDropOnSlot}
+                  isDropZoneActive={dragCounter > 0}
+                  disabled={isLoading}
+                  activeRange={rangeStart !== null ? { start: Math.min(rangeStart, rangeEnd ?? rangeStart), end: Math.max(rangeStart, rangeEnd ?? rangeStart) } : null}
+                  onReset={handleResetSchedule}
+                  selectionMode={selectionMode}
+                  selectedSlots={selectedSlots}
+                  onSlotClick={handleSlotSelection}
+                  onToggleSelectionMode={handleToggleSelectionMode}
+                  onMergeSlots={handleMergeSlots}
+                  onUnmerge={handleUnmergeSlot}
+                />
+              )}
+              {dubPubSchedule && (
+                <ScheduleBoard 
+                  schedule={dubPubSchedule}
+                  djs={djs}
+                  onDjClick={handleOpenModal}
+                  onDragStart={handleDragStart}
+                  onDragOver={handleDragOver}
+                  onDragEnter={handleDragEnter}
+                  onDragEnterSlot={handleDragEnterSlot}
+                  onDragLeave={handleDragLeave}
+                  onDrop={handleDropOnSlot}
+                  isDropZoneActive={dragCounter > 0}
+                  disabled={isLoading}
+                  activeRange={rangeStart !== null ? { start: Math.min(rangeStart, rangeEnd ?? rangeStart), end: Math.max(rangeStart, rangeEnd ?? rangeStart) } : null}
+                  onReset={handleResetSchedule}
+                  selectionMode={selectionMode}
+                  selectedSlots={selectedSlots}
+                  onSlotClick={handleSlotSelection}
+                  onToggleSelectionMode={handleToggleSelectionMode}
+                  onMergeSlots={handleMergeSlots}
+                  onUnmerge={handleUnmergeSlot}
+                />
+              )}
+              {technoHubSchedule && (
+                <ScheduleBoard 
+                  schedule={technoHubSchedule}
+                  djs={djs}
+                  onDjClick={handleOpenModal}
+                  onDragStart={handleDragStart}
+                  onDragOver={handleDragOver}
+                  onDragEnter={handleDragEnter}
+                  onDragEnterSlot={handleDragEnterSlot}
+                  onDragLeave={handleDragLeave}
+                  onDrop={handleDropOnSlot}
+                  isDropZoneActive={dragCounter > 0}
+                  disabled={isLoading}
+                  activeRange={rangeStart !== null ? { start: Math.min(rangeStart, rangeEnd ?? rangeStart), end: Math.max(rangeStart, rangeEnd ?? rangeStart) } : null}
+                  onReset={handleResetSchedule}
+                  selectionMode={selectionMode}
+                  selectedSlots={selectedSlots}
+                  onSlotClick={handleSlotSelection}
+                  onToggleSelectionMode={handleToggleSelectionMode}
+                  onMergeSlots={handleMergeSlots}
+                  onUnmerge={handleUnmergeSlot}
+                />
+              )}
+            </div>
+          ) : (
+            <ScheduleBoard 
+              schedule={getCurrentSchedule()!}
+              djs={djs}
+              onDjClick={handleOpenModal}
+              onDragStart={handleDragStart}
+              onDragOver={handleDragOver}
+              onDragEnter={handleDragEnter}
+              onDragEnterSlot={handleDragEnterSlot}
+              onDragLeave={handleDragLeave}
+              onDrop={handleDropOnSlot}
+              isDropZoneActive={dragCounter > 0}
+              disabled={isLoading}
+              activeRange={rangeStart !== null ? { start: Math.min(rangeStart, rangeEnd ?? rangeStart), end: Math.max(rangeStart, rangeEnd ?? rangeStart) } : null}
+              onReset={handleResetSchedule}
+              selectionMode={selectionMode}
+              selectedSlots={selectedSlots}
+              onSlotClick={handleSlotSelection}
+              onToggleSelectionMode={handleToggleSelectionMode}
+              onMergeSlots={handleMergeSlots}
+              onUnmerge={handleUnmergeSlot}
+            />
+          )}
         </section>
         
       </main>
@@ -687,16 +977,17 @@ function SharedChat({ db, userId, appId, sharedMode, userEmail }: { db: ReturnTy
 
 // --- Helpers ---
 
-function buildTempleBaseSchedule(): Schedule {
-  const name = 'Temple - 31 Jan 2025';
-  // 12:00 to 24:00 in 15-minute blocks
-  const startMinutes = 12 * 60; // 12:00
-  const endMinutes = 24 * 60;   // 24:00
+function buildTempleBaseSchedule(stageName: string = 'Main Stage'): Schedule {
+  const name = `Temple ${stageName} - 31 Jan - 1 Feb 2025`;
+  // Jan 31 00:00 to Feb 1 16:00 in 15-minute blocks (40 hours)
+  const startMinutes = 0; // 00:00 Jan 31
+  const endMinutes = (24 + 16) * 60; // 16:00 Feb 1 (40 hours total)
   const slots: TimeSlot[] = [];
   for (let m = startMinutes; m < endMinutes; m += 15) {
     const from = formatHm(m);
     const to = formatHm(m + 15);
-    slots.push({ time: `${from} - ${to}`, djId: null, djName: null });
+    const day = m < 24 * 60 ? 'Jan 31' : 'Feb 1';
+    slots.push({ time: `${day} ${from} - ${to}`, djId: null, djName: null });
   }
   return { name, timeSlots: slots };
 }
@@ -1163,7 +1454,7 @@ function DJPool({ djs, onDjClick, onDragStart, onDragOver, onDragEnter, onDragLe
 /**
  * Schedule Board
  */
-function ScheduleBoard({ schedule, djs, onDjClick, onDragStart, onDragOver, onDragEnter, onDragEnterSlot, onDragLeave, onDrop, isDropZoneActive, disabled, activeRange, onReset }: {
+function ScheduleBoard({ schedule, djs, onDjClick, onDragStart, onDragOver, onDragEnter, onDragEnterSlot, onDragLeave, onDrop, isDropZoneActive, disabled, activeRange, onReset, selectionMode, selectedSlots, onSlotClick, onToggleSelectionMode, onMergeSlots, onUnmerge }: {
   schedule: Schedule;
   djs: DJ[];
   onDjClick: (dj: DJ) => void;
@@ -1177,28 +1468,58 @@ function ScheduleBoard({ schedule, djs, onDjClick, onDragStart, onDragOver, onDr
   disabled: boolean;
   activeRange: { start: number; end: number } | null;
   onReset: () => void;
+  selectionMode: boolean;
+  selectedSlots: number[];
+  onSlotClick: (index: number) => void;
+  onToggleSelectionMode: () => void;
+  onMergeSlots: () => void;
+  onUnmerge: (index: number) => void;
 }) {
   return (
     <div className="bg-gray-800 p-6 rounded-lg shadow-lg">
       <div className="flex items-center justify-between mb-6">
         <h2 className="text-2xl font-semibold flex items-center">
           <Calendar className="w-6 h-6 mr-3 text-blue-400" />
-          {schedule.name} Set Times
+          {schedule.name}
         </h2>
-        <button
-          onClick={onReset}
-          disabled={disabled}
-          className="py-2 px-4 bg-red-600 hover:bg-red-700 disabled:bg-gray-600 disabled:cursor-not-allowed rounded-md text-white text-sm flex items-center gap-2"
-          title="Clear all assignments and return DJs to unassigned pool"
-        >
-          <Trash2 className="w-4 h-4" />
-          Reset Schedule
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={onToggleSelectionMode}
+            disabled={disabled}
+            className={`py-2 px-3 rounded-md text-sm transition-colors ${
+              selectionMode 
+                ? 'bg-yellow-600 hover:bg-yellow-700' 
+                : 'bg-purple-600 hover:bg-purple-700'
+            } disabled:bg-gray-600 disabled:cursor-not-allowed text-white`}
+          >
+            {selectionMode ? '✕ Cancel' : '⬚ Merge Blocks'}
+          </button>
+          {selectionMode && selectedSlots.length > 1 && (
+            <button
+              onClick={onMergeSlots}
+              disabled={disabled}
+              className="py-2 px-3 bg-green-600 hover:bg-green-700 disabled:bg-gray-600 rounded-md text-sm text-white"
+            >
+              ✓ Merge ({selectedSlots.length})
+            </button>
+          )}
+          <button
+            onClick={onReset}
+            disabled={disabled}
+            className="py-2 px-3 bg-red-600 hover:bg-red-700 disabled:bg-gray-600 disabled:cursor-not-allowed rounded-md text-white text-sm flex items-center gap-2"
+            title="Clear all assignments"
+          >
+            <Trash2 className="w-4 h-4" />
+            Reset
+          </button>
+        </div>
       </div>
       <p className="text-xs text-gray-400 mb-4">
-        Tips: Drag to swap. Use the small edge handles on an assigned slot to extend earlier/later. Hold Shift while dropping to fill a range. Hold Alt to overlap into a slot without replacing.
+        {selectionMode 
+          ? '📍 Click adjacent empty slots to select, then click "Merge" to create larger blocks.'
+          : 'Drag to swap • Edge handles to extend • Shift+drop for range • Alt+drop to overlap'}
       </p>
-      <div className="space-y-4">
+      <div className="space-y-2">
         {schedule.timeSlots.map((slot, index) => (
           <div key={index}>
             <TimeSlot
@@ -1214,6 +1535,10 @@ function ScheduleBoard({ schedule, djs, onDjClick, onDragStart, onDragOver, onDr
               onDrop={onDrop}
               disabled={disabled}
               activeRange={activeRange}
+              isSelected={selectedSlots.includes(index)}
+              onSlotClick={onSlotClick}
+              selectionMode={selectionMode}
+              onUnmerge={onUnmerge}
             />
           </div>
         ))}
@@ -1225,7 +1550,7 @@ function ScheduleBoard({ schedule, djs, onDjClick, onDragStart, onDragOver, onDr
 /**
  * Individual Time Slot
  */
-function TimeSlot({ slot, slotIndex, allDjs, onDjClick, onDragStart, onDragOver, onDragEnter, onDragEnterSlot, onDragLeave, onDrop, disabled, activeRange }: {
+function TimeSlot({ slot, slotIndex, allDjs, onDjClick, onDragStart, onDragOver, onDragEnter, onDragEnterSlot, onDragLeave, onDrop, disabled, activeRange, isSelected, onSlotClick, selectionMode, onUnmerge }: {
   slot: TimeSlot;
   slotIndex: number;
   allDjs: DJ[];
@@ -1238,10 +1563,22 @@ function TimeSlot({ slot, slotIndex, allDjs, onDjClick, onDragStart, onDragOver,
   onDrop: (e: React.DragEvent, slotIndex: number) => void;
   disabled: boolean;
   activeRange: { start: number; end: number } | null;
+  isSelected?: boolean;
+  onSlotClick?: (index: number) => void;
+  selectionMode?: boolean;
+  onUnmerge?: (index: number) => void;
 }) {
   const [isDragOver, setIsDragOver] = useState(false);
   const dj = slot.djId ? allDjs.find(d => d.id === slot.djId) || null : null;
   const inActiveRange = activeRange ? (slotIndex >= activeRange.start && slotIndex <= activeRange.end) : false;
+  
+  // Skip rendering if this is a continuation of a merged block
+  if (slot.mergedWith !== undefined) {
+    return null;
+  }
+  
+  const isMerged = slot.isMergedStart && slot.mergedCount && slot.mergedCount > 1;
+  const placeholder = dj ? `https://placehold.co/60x60/374151/9CA3AF?text=${encodeURIComponent(dj.djName?.charAt(0) || 'D')}` : '';
   
   const handleSlotDragEnter = (e: React.DragEvent) => {
     e.preventDefault();
@@ -1267,45 +1604,72 @@ function TimeSlot({ slot, slotIndex, allDjs, onDjClick, onDragStart, onDragOver,
 
   return (
     <div 
+      onClick={() => selectionMode && onSlotClick && onSlotClick(slotIndex)}
       className={`flex items-center bg-gray-700 rounded-lg p-3 transition-all duration-200 ${
         (isDragOver || inActiveRange) ? 'ring-2 ring-blue-500 bg-gray-600' : ''
-      }`}
+      } ${isSelected ? 'ring-2 ring-yellow-500 bg-yellow-900/30' : ''} ${
+        isMerged ? 'border-l-4 border-purple-500' : ''
+      } ${selectionMode ? 'cursor-pointer hover:bg-gray-600' : ''}`}
       onDragOver={onDragOver}
       onDragEnter={handleSlotDragEnter}
       onDragLeave={handleSlotDragLeave}
       onDrop={handleSlotDrop}
     >
-      <div className="w-32 flex-shrink-0 text-blue-300 font-mono flex items-center">
+      {/* Artist Logo Preview */}
+      {dj && dj.photoUrl && (
+        <div className="mr-3 flex-shrink-0">
+          <img
+            src={dj.photoUrl || placeholder}
+            alt={dj.djName}
+            onError={(e) => { (e.currentTarget as HTMLImageElement).src = placeholder; }}
+            className="w-12 h-12 rounded-full object-cover border-2 border-blue-400"
+          />
+        </div>
+      )}
+      
+      <div className="flex-shrink-0 text-blue-300 font-mono flex items-center mr-4">
         <Clock className="w-4 h-4 mr-2" />
-        {slot.time}
+        <div className="flex flex-col">
+          <span className="text-sm">{slot.time}</span>
+          {isMerged && (
+            <span className="text-xs text-purple-300">
+              {slot.mergedCount} slots ({slot.mergedCount! * 15} min)
+            </span>
+          )}
+        </div>
       </div>
+      
       <div className="flex-grow relative">
         {dj ? (
           <div className="relative">
-            {/* Left resize handle */}
-            <div
-              draggable={!disabled}
-              onDragStart={(e) => onDragStart(e, { from: 'resize', direction: 'left', slotIndex, djId: dj.id, djName: dj.djName })}
-              title="Extend earlier"
-              className="absolute left-0 top-1/2 -translate-y-1/2 w-2 h-8 bg-blue-500/60 hover:bg-blue-500 rounded-sm cursor-ew-resize"
-            />
-            {/* Right resize handle */}
-            <div
-              draggable={!disabled}
-              onDragStart={(e) => onDragStart(e, { from: 'resize', direction: 'right', slotIndex, djId: dj.id, djName: dj.djName })}
-              title="Extend later"
-              className="absolute right-0 top-1/2 -translate-y-1/2 w-2 h-8 bg-blue-500/60 hover:bg-blue-500 rounded-sm cursor-ew-resize"
-            />
+            {!selectionMode && (
+              <>
+                {/* Left resize handle */}
+                <div
+                  draggable={!disabled}
+                  onDragStart={(e) => onDragStart(e, { from: 'resize', direction: 'left', slotIndex, djId: dj.id, djName: dj.djName })}
+                  title="Extend earlier"
+                  className="absolute left-0 top-1/2 -translate-y-1/2 w-2 h-8 bg-blue-500/60 hover:bg-blue-500 rounded-sm cursor-ew-resize z-10"
+                />
+                {/* Right resize handle */}
+                <div
+                  draggable={!disabled}
+                  onDragStart={(e) => onDragStart(e, { from: 'resize', direction: 'right', slotIndex, djId: dj.id, djName: dj.djName })}
+                  title="Extend later"
+                  className="absolute right-0 top-1/2 -translate-y-1/2 w-2 h-8 bg-blue-500/60 hover:bg-blue-500 rounded-sm cursor-ew-resize z-10"
+                />
+              </>
+            )}
             <DJItem
               dj={dj}
               onClick={() => onDjClick(dj)}
-              isDraggable={!disabled}
+              isDraggable={!disabled && !selectionMode}
               onDragStart={(e) => onDragStart(e, { from: 'slot', slotIndex, djId: dj.id, djName: dj.djName })}
             />
           </div>
         ) : (
           <div className="text-center text-gray-500 p-3 border border-dashed border-gray-600 rounded-md">
-            Empty Slot
+            {selectionMode ? 'Select to merge' : 'Empty Slot'}
           </div>
         )}
         {/* Guests */}
@@ -1319,6 +1683,17 @@ function TimeSlot({ slot, slotIndex, allDjs, onDjClick, onDragStart, onDragOver,
           </div>
         )}
       </div>
+      
+      {/* Unmerge button for merged blocks */}
+      {isMerged && onUnmerge && !selectionMode && (
+        <button
+          onClick={(e) => { e.stopPropagation(); onUnmerge(slotIndex); }}
+          className="ml-2 px-2 py-1 bg-purple-600 hover:bg-purple-700 rounded text-xs"
+          title="Unmerge this block"
+        >
+          Unmerge
+        </button>
+      )}
     </div>
   );
 }
