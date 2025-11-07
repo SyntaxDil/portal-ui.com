@@ -582,6 +582,7 @@ export default function App() {
             onDrop={handleDropOnUnassign}
             isDropZoneActive={dragCounter > 0}
             disabled={isLoading}
+            schedule={schedule}
           />
         </aside>
 
@@ -1091,7 +1092,7 @@ function AdminSettings({ db, userId, appId }: { db: ReturnType<typeof getFiresto
 /**
  * Unassigned DJ Pool
  */
-function DJPool({ djs, onDjClick, onDragStart, onDragOver, onDragEnter, onDragLeave, onDrop, isDropZoneActive, disabled }: {
+function DJPool({ djs, onDjClick, onDragStart, onDragOver, onDragEnter, onDragLeave, onDrop, isDropZoneActive, disabled, schedule }: {
   djs: DJ[];
   onDjClick: (dj: DJ) => void;
   onDragStart: (e: React.DragEvent, data: unknown) => void;
@@ -1101,7 +1102,15 @@ function DJPool({ djs, onDjClick, onDragStart, onDragOver, onDragEnter, onDragLe
   onDrop: (e: React.DragEvent) => void;
   isDropZoneActive: boolean;
   disabled: boolean;
+  schedule: Schedule | null;
 }) {
+  // Helper: get assigned slots for a DJ
+  const getDjSlots = (djId: string) => {
+    if (!schedule) return [];
+    return schedule.timeSlots.filter(slot => 
+      slot.djId === djId || (slot.guests && slot.guests.some(g => g.djId === djId))
+    );
+  };
   return (
     <div className="bg-gray-800 p-6 rounded-lg shadow-lg flex-grow">
       <h2 className="text-2xl font-semibold mb-4 flex items-center">
@@ -1112,17 +1121,21 @@ function DJPool({ djs, onDjClick, onDragStart, onDragOver, onDragEnter, onDragLe
         {djs.length === 0 ? (
           <p className="text-gray-400">No unassigned DJs. Register one!</p>
         ) : (
-          djs.map(dj => (
-            <div key={dj.id}>
-              <DJItem
-                dj={dj}
-                onClick={() => onDjClick(dj)}
-                isDraggable={!disabled}
-                onDragStart={(e) => onDragStart(e, { from: 'pool', dj })}
-                showInvite={true}
-              />
-            </div>
-          ))
+          djs.map(dj => {
+            const djSlots = getDjSlots(dj.id!);
+            return (
+              <div key={dj.id}>
+                <DJItem
+                  dj={dj}
+                  onClick={() => onDjClick(dj)}
+                  isDraggable={!disabled}
+                  onDragStart={(e) => onDragStart(e, { from: 'pool', dj })}
+                  showInvite={djSlots.length > 0}
+                  assignedSlots={djSlots}
+                />
+              </div>
+            );
+          })
         )}
       </div>
       
@@ -1313,19 +1326,27 @@ function TimeSlot({ slot, slotIndex, allDjs, onDjClick, onDragStart, onDragOver,
 /**
  * Draggable/Clickable DJ Item
  */
-function DJItem({ dj, onClick, isDraggable, onDragStart, showInvite }: {
+function DJItem({ dj, onClick, isDraggable, onDragStart, showInvite, assignedSlots }: {
   dj: DJ;
   onClick: () => void;
   isDraggable: boolean;
   onDragStart: (e: React.DragEvent) => void;
   showInvite?: boolean;
+  assignedSlots?: TimeSlot[];
 }) {
   const [copied, setCopied] = useState(false);
   const placeholder = `https://placehold.co/40x40/374151/9CA3AF?text=${encodeURIComponent(dj.djName?.charAt(0) || 'D')}`;
   
   const handleInvite = (e: React.MouseEvent) => {
     e.stopPropagation();
-    const inviteUrl = `${window.location.origin}/Registration.html?djName=${encodeURIComponent(dj.djName)}&realName=${encodeURIComponent(dj.realName)}`;
+    let inviteUrl = `${window.location.origin}/Registration.html?djName=${encodeURIComponent(dj.djName)}&realName=${encodeURIComponent(dj.realName)}`;
+    
+    // Add assigned time slots to the URL
+    if (assignedSlots && assignedSlots.length > 0) {
+      const slotTimes = assignedSlots.map(slot => slot.time).join(',');
+      inviteUrl += `&slots=${encodeURIComponent(slotTimes)}`;
+    }
+    
     navigator.clipboard.writeText(inviteUrl).then(() => {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);

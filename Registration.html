@@ -59,6 +59,15 @@
                         <small style="display:block;margin-top:4px;color:#666;">You've been invited as this DJ. This will be your profile name.</small>
                     </div>
 
+                    <!-- Assigned Time Slots (if invited) -->
+                    <div class="form-group" id="assignedSlotsGroup" style="display:none;">
+                        <label>Your Assigned Set Times</label>
+                        <div id="assignedSlotsList" style="padding:12px;background-color:#f8f9fa;border:1px solid #dee2e6;border-radius:4px;">
+                            <!-- Slots will be populated by JavaScript -->
+                        </div>
+                        <small style="display:block;margin-top:4px;color:#666;">These are your scheduled set times. Complete registration to confirm.</small>
+                    </div>
+
                     <!-- Full Name -->
                     <div class="form-group">
                         <label for="fullName">Full Name *</label>
@@ -211,6 +220,8 @@
                 const djNameInput = document.getElementById('djName');
                 const djNameGroup = document.getElementById('djNameGroup');
                 const fullNameInput = document.getElementById('fullName');
+                const assignedSlotsGroup = document.getElementById('assignedSlotsGroup');
+                const assignedSlotsList = document.getElementById('assignedSlotsList');
 
                 const services = [
                     { value: 'dropfm', label: 'DropFm', url: '/Sites/DropHub/' },
@@ -225,6 +236,7 @@
                     const siteParam = params.get('site');
                     const djNameParam = params.get('djName');
                     const realNameParam = params.get('realName');
+                    const slotsParam = params.get('slots');
 
                     // Pre-select service
                     if (siteParam && select) {
@@ -239,6 +251,15 @@
                         if (realNameParam && fullNameInput) fullNameInput.value = realNameParam;
                         // Auto-select TempleDjSpot service
                         if (select) select.value = 'templedjspot';
+                        
+                        // Display assigned time slots
+                        if (slotsParam && assignedSlotsGroup && assignedSlotsList) {
+                            const slots = slotsParam.split(',');
+                            assignedSlotsList.innerHTML = slots
+                                .map(slot => `<div style="padding:6px 10px;margin:4px 0;background-color:#fff;border:1px solid #ccc;border-radius:3px;font-weight:500;"><span style="color:#0066cc;">🎧</span> ${slot}</div>`)
+                                .join('');
+                            assignedSlotsGroup.style.display = 'block';
+                        }
                     }
                 } catch (_) {}
 
