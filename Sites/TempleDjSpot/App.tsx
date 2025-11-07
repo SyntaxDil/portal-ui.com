@@ -607,6 +607,12 @@ export default function App() {
     await updateDoc(scheduleRef, { timeSlots });
   };
 
+  // Helper to update schedule name
+  const updateScheduleName = async (stagePath: StageType, newName: string) => {
+    const scheduleRef = doc(db!, `${sharedMode ? `apps/${appId}` : `users/${userId}/apps/${appId}`}/schedule/${stagePath}`);
+    await updateDoc(scheduleRef, { name: newName });
+  };
+
   // --- Calculate Unassigned DJs ---
   const assignedDjIds = new Set(
     (schedule?.timeSlots || []).flatMap(slot => [
@@ -830,6 +836,7 @@ export default function App() {
                   onToggleSelectionMode={handleToggleSelectionMode}
                   onMergeSlots={handleMergeSlots}
                   onUnmerge={handleUnmergeSlot}
+                  onNameUpdate={(name) => updateScheduleName('mainStage', name)}
                 />
               )}
               {dubPubSchedule && (
@@ -853,6 +860,7 @@ export default function App() {
                   onToggleSelectionMode={handleToggleSelectionMode}
                   onMergeSlots={handleMergeSlots}
                   onUnmerge={handleUnmergeSlot}
+                  onNameUpdate={(name) => updateScheduleName('dubPub', name)}
                 />
               )}
               {technoHubSchedule && (
@@ -876,6 +884,7 @@ export default function App() {
                   onToggleSelectionMode={handleToggleSelectionMode}
                   onMergeSlots={handleMergeSlots}
                   onUnmerge={handleUnmergeSlot}
+                  onNameUpdate={(name) => updateScheduleName('technoHub', name)}
                 />
               )}
             </div>
@@ -900,6 +909,7 @@ export default function App() {
               onToggleSelectionMode={handleToggleSelectionMode}
               onMergeSlots={handleMergeSlots}
               onUnmerge={handleUnmergeSlot}
+              onNameUpdate={(name) => updateScheduleName(currentStage, name)}
             />
           )}
         </section>
@@ -1465,7 +1475,7 @@ function DJPool({ djs, onDjClick, onDragStart, onDragOver, onDragEnter, onDragLe
 /**
  * Schedule Board
  */
-function ScheduleBoard({ schedule, djs, onDjClick, onDragStart, onDragOver, onDragEnter, onDragEnterSlot, onDragLeave, onDrop, isDropZoneActive, disabled, activeRange, onReset, selectionMode, selectedSlots, onSlotClick, onToggleSelectionMode, onMergeSlots, onUnmerge }: {
+function ScheduleBoard({ schedule, djs, onDjClick, onDragStart, onDragOver, onDragEnter, onDragEnterSlot, onDragLeave, onDrop, isDropZoneActive, disabled, activeRange, onReset, selectionMode, selectedSlots, onSlotClick, onToggleSelectionMode, onMergeSlots, onUnmerge, onNameUpdate }: {
   schedule: Schedule;
   djs: DJ[];
   onDjClick: (dj: DJ) => void;
@@ -1485,14 +1495,68 @@ function ScheduleBoard({ schedule, djs, onDjClick, onDragStart, onDragOver, onDr
   onToggleSelectionMode: () => void;
   onMergeSlots: () => void;
   onUnmerge: (index: number) => void;
+  onNameUpdate?: (newName: string) => Promise<void>;
 }) {
+  const [isEditingName, setIsEditingName] = useState(false);
+  const [editedName, setEditedName] = useState(schedule.name);
+  const [isSaving, setIsSaving] = useState(false);
+
+  const handleNameSave = async () => {
+    if (!onNameUpdate || editedName.trim() === schedule.name) {
+      setIsEditingName(false);
+      return;
+    }
+    
+    setIsSaving(true);
+    try {
+      await onNameUpdate(editedName.trim());
+      setIsEditingName(false);
+    } catch (err) {
+      console.error('Failed to update name:', err);
+      setEditedName(schedule.name); // Reset on error
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleNameKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      handleNameSave();
+    } else if (e.key === 'Escape') {
+      setEditedName(schedule.name);
+      setIsEditingName(false);
+    }
+  };
+
   return (
     <div className="bg-gray-800 p-6 rounded-lg shadow-lg">
       <div className="flex items-center justify-between mb-6">
-        <h2 className="text-2xl font-semibold flex items-center">
-          <Calendar className="w-6 h-6 mr-3 text-blue-400" />
-          {schedule.name}
-        </h2>
+        <div className="flex items-center flex-grow">
+          <Calendar className="w-6 h-6 mr-3 text-blue-400 flex-shrink-0" />
+          {isEditingName ? (
+            <div className="flex items-center gap-2 flex-grow">
+              <input
+                type="text"
+                value={editedName}
+                onChange={(e) => setEditedName(e.target.value)}
+                onKeyDown={handleNameKeyDown}
+                onBlur={handleNameSave}
+                autoFocus
+                disabled={isSaving}
+                className="bg-gray-700 text-white px-3 py-1 rounded text-xl font-semibold border border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-400 flex-grow"
+              />
+              {isSaving && <span className="text-gray-400 text-sm">Saving...</span>}
+            </div>
+          ) : (
+            <h2 
+              className="text-2xl font-semibold cursor-pointer hover:text-blue-300 transition-colors"
+              onClick={() => setIsEditingName(true)}
+              title="Click to edit stage name"
+            >
+              {schedule.name}
+            </h2>
+          )}
+        </div>
         <div className="flex gap-2">
           <button
             onClick={onToggleSelectionMode}
