@@ -87,6 +87,15 @@ interface Schedule {
   timeSlots: TimeSlot[];
 }
 
+interface Todo {
+  id?: string;
+  text: string;
+  completed: boolean;
+  createdAt: string;
+  createdBy: string;
+  completedAt?: string;
+}
+
 type StageType = 'mainStage' | 'dubPub' | 'technoHub';
 
 // --- Main Application Component ---
@@ -111,6 +120,11 @@ export default function App() {
   const [modalOpen, setModalOpen] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
   const [userEmail, setUserEmail] = useState<string | null>(null);
+  
+  // Todo Panel State
+  const [todos, setTodos] = useState<Todo[]>([]);
+  const [showTodoPanel, setShowTodoPanel] = useState(false);
+  const [newTodoText, setNewTodoText] = useState('');
   
   // UI State
   const [isLoading, setIsLoading] = useState(false);
@@ -219,6 +233,19 @@ export default function App() {
   const unsubscribeDubPub = setupStageListener('Dub', 'dubPub', setDubPubSchedule);
   const unsubscribeTechnoHub = setupStageListener('Techno', 'technoHub', setTechnoHubSchedule);
 
+    // Listen to todos
+    const todosRef = collection(db, `${basePath}/todos`);
+    const todosQuery = query(todosRef, orderBy('createdAt', 'desc'));
+    const unsubscribeTodos = onSnapshot(todosQuery, (snap) => {
+      const loadedTodos: Todo[] = [];
+      snap.forEach(doc => {
+        loadedTodos.push({ id: doc.id, ...doc.data() } as Todo);
+      });
+      setTodos(loadedTodos);
+    }, (err) => {
+      console.error('Error listening to todos:', err);
+    });
+
     // Ensure a crew meta doc exists for this app/user
   const metaRef = doc(db, `${basePath}/meta/app`);
     setDoc(metaRef, { ownerUid: userId, appId, createdAt: new Date().toISOString(), allowedAdminEmails: [], allowedAdminUids: [] }, { merge: true }).catch((e) => {
@@ -240,6 +267,7 @@ export default function App() {
       unsubscribeMainStage();
       unsubscribeDubPub();
       unsubscribeTechnoHub();
+      unsubscribeTodos();
       unsubMeta && unsubMeta();
     };
   }, [isAuthReady, db, userId, userEmail]);
@@ -622,6 +650,77 @@ export default function App() {
     await updateDoc(scheduleRef, { name: newName });
   };
 
+  // Helper to clear guests from a slot
+  const handleClearGuests = async (slotIndex: number, stage: StageType) => {
+    if (!window.confirm('Remove all overlapping DJs from this slot?')) return;
+    setIsLoading(true);
+    try {
+      const targetSchedule = stage === 'mainStage' ? schedule : 
+                            stage === 'dubPub' ? dubPubSchedule : 
+                            technoHubSchedule;
+      
+      if (!targetSchedule) return;
+      
+      const newTimeSlots = [...targetSchedule.timeSlots];
+      newTimeSlots[slotIndex] = { 
+        ...newTimeSlots[slotIndex], 
+        guests: [] 
+      };
+      
+      const scheduleRef = doc(db!, `${sharedMode ? `apps/${appId}` : `users/${userId}/apps/${appId}`}/schedule/${stage}`);
+      await updateDoc(scheduleRef, { timeSlots: newTimeSlots });
+    } catch (err) {
+      console.error('Error clearing guests:', err);
+      setError('Failed to clear guests.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Todo handlers
+  const handleAddTodo = async () => {
+    if (!newTodoText.trim() || !db || !userId) return;
+    try {
+      const basePath = sharedMode ? `apps/${appId}` : `users/${userId}/apps/${appId}`;
+      const todosRef = collection(db, `${basePath}/todos`);
+      await addDoc(todosRef, {
+        text: newTodoText.trim(),
+        completed: false,
+        createdAt: new Date().toISOString(),
+        createdBy: userEmail || userId
+      });
+      setNewTodoText('');
+    } catch (err) {
+      console.error('Error adding todo:', err);
+    }
+  };
+
+  const handleToggleTodo = async (todoId: string, currentStatus: boolean) => {
+    if (!db) return;
+    try {
+      const basePath = sharedMode ? `apps/${appId}` : `users/${userId}/apps/${appId}`;
+      const todoRef = doc(db, `${basePath}/todos/${todoId}`);
+      await updateDoc(todoRef, { 
+        completed: !currentStatus,
+        completedAt: !currentStatus ? new Date().toISOString() : null
+      });
+    } catch (err) {
+      console.error('Error toggling todo:', err);
+    }
+  };
+
+  const handleDeleteTodo = async (todoId: string) => {
+    if (!window.confirm('Delete this todo?')) return;
+    if (!db) return;
+    try {
+      const basePath = sharedMode ? `apps/${appId}` : `users/${userId}/apps/${appId}`;
+      const todoRef = doc(db, `${basePath}/todos/${todoId}`);
+      await updateDoc(todoRef, { deleted: true });
+    } catch (err) {
+      console.error('Error deleting todo:', err);
+    }
+  };
+
   // --- Calculate Unassigned DJs ---
   const assignedDjIds = new Set(
     (schedule?.timeSlots || []).flatMap(slot => [
@@ -713,8 +812,14 @@ export default function App() {
             {isAdmin && (
               <span className="inline-flex items-center px-2 py-0.5 rounded bg-green-800 text-green-200 text-xs uppercase tracking-wide">Admin</span>
             )}
-            <div className="mt-2">
+            <div className="mt-2 flex gap-2">
               <a href="/hub.html" className="inline-block py-1.5 px-3 bg-indigo-600 hover:bg-indigo-700 rounded-md text-white">Enter the Portal</a>
+              <button 
+                onClick={() => setShowTodoPanel(!showTodoPanel)}
+                className="py-1.5 px-3 bg-purple-600 hover:bg-purple-700 rounded-md text-white flex items-center gap-2"
+              >
+                📝 Notes ({todos.filter(t => !t.completed).length})
+              </button>
             </div>
           </div>
         )}
@@ -847,6 +952,7 @@ export default function App() {
                   onUnmerge={handleUnmergeSlot}
                   onNameUpdate={(name) => updateScheduleName('mainStage', name)}
                   stage="mainStage"
+                  onClearGuests={handleClearGuests}
                 />
               )}
               {dubPubSchedule && (
@@ -872,6 +978,7 @@ export default function App() {
                   onUnmerge={handleUnmergeSlot}
                   onNameUpdate={(name) => updateScheduleName('dubPub', name)}
                   stage="dubPub"
+                  onClearGuests={handleClearGuests}
                 />
               )}
               {technoHubSchedule && (
@@ -897,6 +1004,7 @@ export default function App() {
                   onUnmerge={handleUnmergeSlot}
                   onNameUpdate={(name) => updateScheduleName('technoHub', name)}
                   stage="technoHub"
+                  onClearGuests={handleClearGuests}
                 />
               )}
             </div>
@@ -923,6 +1031,7 @@ export default function App() {
               onUnmerge={handleUnmergeSlot}
               onNameUpdate={(name) => updateScheduleName(currentStage, name)}
               stage={currentStage}
+              onClearGuests={handleClearGuests}
             />
           )}
         </section>
@@ -945,6 +1054,70 @@ export default function App() {
       {/* --- DJ Info Modal --- */}
       {modalOpen && selectedDj && (
         <DJModal dj={selectedDj} onClose={handleCloseModal} />
+      )}
+
+      {/* --- Todo/Notes Panel --- */}
+      {showTodoPanel && (
+        <div className="fixed top-4 right-4 w-96 max-h-[80vh] bg-gray-800 border-2 border-purple-500 rounded-lg shadow-2xl z-50 flex flex-col">
+          <div className="flex items-center justify-between p-4 border-b border-gray-700">
+            <h3 className="text-xl font-bold text-purple-400">📝 Admin Notes</h3>
+            <button onClick={() => setShowTodoPanel(false)} className="text-gray-400 hover:text-white">
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+          
+          <div className="flex-1 overflow-y-auto p-4 space-y-2">
+            {todos.filter(t => !t.deleted).length === 0 ? (
+              <p className="text-gray-500 text-sm text-center py-8">No notes yet. Add one below!</p>
+            ) : (
+              todos.filter(t => !t.deleted).map(todo => (
+                <div key={todo.id} className={`p-3 rounded-lg border ${todo.completed ? 'bg-gray-900 border-gray-700' : 'bg-gray-700 border-gray-600'}`}>
+                  <div className="flex items-start gap-2">
+                    <input 
+                      type="checkbox" 
+                      checked={todo.completed}
+                      onChange={() => handleToggleTodo(todo.id!, todo.completed)}
+                      className="mt-1 w-4 h-4 cursor-pointer"
+                    />
+                    <div className="flex-1">
+                      <p className={`text-sm ${todo.completed ? 'line-through text-gray-500' : 'text-gray-100'}`}>
+                        {todo.text}
+                      </p>
+                      <p className="text-xs text-gray-500 mt-1">
+                        {todo.createdBy} • {new Date(todo.createdAt).toLocaleString()}
+                      </p>
+                    </div>
+                    <button 
+                      onClick={() => handleDeleteTodo(todo.id!)}
+                      className="text-gray-500 hover:text-red-400"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+          
+          <div className="p-4 border-t border-gray-700">
+            <div className="flex gap-2">
+              <input 
+                type="text"
+                value={newTodoText}
+                onChange={(e) => setNewTodoText(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleAddTodo()}
+                placeholder="Add a note or task..."
+                className="flex-1 p-2 bg-gray-700 border border-gray-600 rounded-md text-white text-sm"
+              />
+              <button 
+                onClick={handleAddTodo}
+                className="py-2 px-4 bg-purple-600 hover:bg-purple-700 rounded-md text-white font-medium"
+              >
+                Add
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
@@ -1494,7 +1667,7 @@ function DJPool({ djs, onDjClick, onDragStart, onDragOver, onDragEnter, onDragLe
 /**
  * Schedule Board
  */
-function ScheduleBoard({ schedule, djs, onDjClick, onDragStart, onDragOver, onDragEnter, onDragEnterSlot, onDragLeave, onDrop, isDropZoneActive, disabled, activeRange, onReset, selectionMode, selectedSlots, onSlotClick, onToggleSelectionMode, onMergeSlots, onUnmerge, onNameUpdate, stage }: {
+function ScheduleBoard({ schedule, djs, onDjClick, onDragStart, onDragOver, onDragEnter, onDragEnterSlot, onDragLeave, onDrop, isDropZoneActive, disabled, activeRange, onReset, selectionMode, selectedSlots, onSlotClick, onToggleSelectionMode, onMergeSlots, onUnmerge, onNameUpdate, stage, onClearGuests }: {
   schedule: Schedule;
   djs: DJ[];
   onDjClick: (dj: DJ) => void;
@@ -1516,6 +1689,7 @@ function ScheduleBoard({ schedule, djs, onDjClick, onDragStart, onDragOver, onDr
   onUnmerge: (index: number) => void;
   onNameUpdate?: (newName: string) => Promise<void>;
   stage?: StageType;
+  onClearGuests?: (slotIndex: number, stage: StageType) => void;
 }) {
   const [isEditingName, setIsEditingName] = useState(false);
   const [editedName, setEditedName] = useState(schedule.name);
@@ -1635,6 +1809,7 @@ function ScheduleBoard({ schedule, djs, onDjClick, onDragStart, onDragOver, onDr
               selectionMode={selectionMode}
               onUnmerge={onUnmerge}
               stage={stage}
+              onClearGuests={onClearGuests}
             />
           </div>
         ))}
@@ -1646,7 +1821,7 @@ function ScheduleBoard({ schedule, djs, onDjClick, onDragStart, onDragOver, onDr
 /**
  * Individual Time Slot
  */
-function TimeSlot({ slot, slotIndex, allDjs, onDjClick, onDragStart, onDragOver, onDragEnter, onDragEnterSlot, onDragLeave, onDrop, disabled, activeRange, isSelected, onSlotClick, selectionMode, onUnmerge, stage }: {
+function TimeSlot({ slot, slotIndex, allDjs, onDjClick, onDragStart, onDragOver, onDragEnter, onDragEnterSlot, onDragLeave, onDrop, disabled, activeRange, isSelected, onSlotClick, selectionMode, onUnmerge, stage, onClearGuests }: {
   slot: TimeSlot;
   slotIndex: number;
   allDjs: DJ[];
@@ -1664,6 +1839,7 @@ function TimeSlot({ slot, slotIndex, allDjs, onDjClick, onDragStart, onDragOver,
   selectionMode?: boolean;
   onUnmerge?: (index: number) => void;
   stage?: StageType;
+  onClearGuests?: (slotIndex: number, stage: StageType) => void;
 }) {
   const [isDragOver, setIsDragOver] = useState(false);
   const dj = slot.djId ? allDjs.find(d => d.id === slot.djId) || null : null;
@@ -1771,12 +1947,26 @@ function TimeSlot({ slot, slotIndex, allDjs, onDjClick, onDragStart, onDragOver,
         )}
         {/* Guests */}
         {slot.guests && slot.guests.length > 0 && (
-          <div className="mt-2 flex flex-wrap gap-2">
-            {slot.guests.map(g => (
-              <span key={g.djId} className="text-xs bg-gray-900 border border-gray-600 rounded px-2 py-1 text-gray-200">
-                + {g.djName}
-              </span>
-            ))}
+          <div className="mt-2">
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-xs text-gray-400">Overlapping DJs:</span>
+              {onClearGuests && stage && (
+                <button
+                  onClick={(e) => { e.stopPropagation(); onClearGuests(slotIndex, stage); }}
+                  className="text-xs px-2 py-0.5 bg-red-600 hover:bg-red-700 rounded text-white"
+                  title="Remove all overlapping DJs"
+                >
+                  Clear All
+                </button>
+              )}
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {slot.guests.map(g => (
+                <span key={g.djId} className="text-xs bg-gray-900 border border-gray-600 rounded px-2 py-1 text-gray-200">
+                  + {g.djName}
+                </span>
+              ))}
+            </div>
           </div>
         )}
       </div>
