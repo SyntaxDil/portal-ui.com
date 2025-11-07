@@ -427,6 +427,26 @@ export default function App() {
     }
   };
 
+  const handleResetSchedule = async () => {
+    if (!window.confirm('Clear all slot assignments and return all DJs to the unassigned pool?')) return;
+    setIsLoading(true);
+    try {
+      const scheduleRef = doc(db!, `${sharedMode ? `apps/${appId}` : `users/${userId}/apps/${appId}`}/schedule/mainStage`);
+      const newTimeSlots = (schedule as Schedule).timeSlots.map(slot => ({
+        time: slot.time,
+        djId: null,
+        djName: null,
+        guests: undefined
+      }));
+      await updateDoc(scheduleRef, { timeSlots: newTimeSlots });
+    } catch (err) {
+      console.error('Error resetting schedule:', err);
+      setError('Failed to reset schedule.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   // --- Calculate Unassigned DJs ---
   const assignedDjIds = new Set(
     (schedule?.timeSlots || []).flatMap(slot => [
@@ -575,6 +595,7 @@ export default function App() {
             isDropZoneActive={dragCounter > 0}
             disabled={isLoading}
             activeRange={rangeStart !== null ? { start: Math.min(rangeStart, rangeEnd ?? rangeStart), end: Math.max(rangeStart, rangeEnd ?? rangeStart) } : null}
+            onReset={handleResetSchedule}
           />
         </section>
         
@@ -1118,7 +1139,7 @@ function DJPool({ djs, onDjClick, onDragStart, onDragOver, onDragEnter, onDragLe
 /**
  * Schedule Board
  */
-function ScheduleBoard({ schedule, djs, onDjClick, onDragStart, onDragOver, onDragEnter, onDragEnterSlot, onDragLeave, onDrop, isDropZoneActive, disabled, activeRange }: {
+function ScheduleBoard({ schedule, djs, onDjClick, onDragStart, onDragOver, onDragEnter, onDragEnterSlot, onDragLeave, onDrop, isDropZoneActive, disabled, activeRange, onReset }: {
   schedule: Schedule;
   djs: DJ[];
   onDjClick: (dj: DJ) => void;
@@ -1131,13 +1152,25 @@ function ScheduleBoard({ schedule, djs, onDjClick, onDragStart, onDragOver, onDr
   isDropZoneActive: boolean;
   disabled: boolean;
   activeRange: { start: number; end: number } | null;
+  onReset: () => void;
 }) {
   return (
     <div className="bg-gray-800 p-6 rounded-lg shadow-lg">
-      <h2 className="text-2xl font-semibold mb-6 flex items-center">
-        <Calendar className="w-6 h-6 mr-3 text-blue-400" />
-        {schedule.name} Set Times
-      </h2>
+      <div className="flex items-center justify-between mb-6">
+        <h2 className="text-2xl font-semibold flex items-center">
+          <Calendar className="w-6 h-6 mr-3 text-blue-400" />
+          {schedule.name} Set Times
+        </h2>
+        <button
+          onClick={onReset}
+          disabled={disabled}
+          className="py-2 px-4 bg-red-600 hover:bg-red-700 disabled:bg-gray-600 disabled:cursor-not-allowed rounded-md text-white text-sm flex items-center gap-2"
+          title="Clear all assignments and return DJs to unassigned pool"
+        >
+          <Trash2 className="w-4 h-4" />
+          Reset Schedule
+        </button>
+      </div>
       <p className="text-xs text-gray-400 mb-4">
         Tips: Drag to swap. Use the small edge handles on an assigned slot to extend earlier/later. Hold Shift while dropping to fill a range. Hold Alt to overlap into a slot without replacing.
       </p>
