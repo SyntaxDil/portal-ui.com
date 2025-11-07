@@ -45,6 +45,20 @@
                 <h2 class="text-center mb-3">Create Your Account</h2>
                 <form id="registrationForm" action="/submit-registration" method="POST">
                     
+                    <!-- DJ Name (if invited) -->
+                    <div class="form-group" id="djNameGroup" style="display:none;">
+                        <label for="djName">DJ Name</label>
+                        <input 
+                            type="text" 
+                            id="djName" 
+                            name="djName" 
+                            placeholder="Your DJ name"
+                            readonly
+                            style="background-color:#f0f0f0;"
+                        >
+                        <small style="display:block;margin-top:4px;color:#666;">You've been invited as this DJ. This will be your profile name.</small>
+                    </div>
+
                     <!-- Full Name -->
                     <div class="form-group">
                         <label for="fullName">Full Name *</label>
@@ -190,9 +204,14 @@
     </script>
         <script>
             // Service helper: preselect by ?site=... and render quick links
+            // DJ Invite: pre-fill djName and realName from URL params
             document.addEventListener('DOMContentLoaded', () => {
                 const select = document.getElementById('serviceType');
                 const linksEl = document.getElementById('serviceLinks');
+                const djNameInput = document.getElementById('djName');
+                const djNameGroup = document.getElementById('djNameGroup');
+                const fullNameInput = document.getElementById('fullName');
+
                 const services = [
                     { value: 'dropfm', label: 'DropFm', url: '/Sites/DropHub/' },
                     { value: 'jackeddnb', label: 'JackedDnb', url: '/Sites/JackedDnb/' },
@@ -201,13 +220,27 @@
                     { value: 'templedjspot', label: 'TempleDjSpot', url: '/Spaces/TempleDjs/' }
                 ];
 
-                        try {
-                            const siteParam = new URLSearchParams(window.location.search).get('site');
-                            if (siteParam && select) {
-                                const exists = Array.from(select.options).some(o => o.value === siteParam);
-                                if (exists) select.value = siteParam;
-                            }
-                        } catch (_) {}
+                try {
+                    const params = new URLSearchParams(window.location.search);
+                    const siteParam = params.get('site');
+                    const djNameParam = params.get('djName');
+                    const realNameParam = params.get('realName');
+
+                    // Pre-select service
+                    if (siteParam && select) {
+                        const exists = Array.from(select.options).some(o => o.value === siteParam);
+                        if (exists) select.value = siteParam;
+                    }
+
+                    // If djName is provided, this is a DJ invite
+                    if (djNameParam) {
+                        if (djNameInput) djNameInput.value = djNameParam;
+                        if (djNameGroup) djNameGroup.style.display = 'block';
+                        if (realNameParam && fullNameInput) fullNameInput.value = realNameParam;
+                        // Auto-select TempleDjSpot service
+                        if (select) select.value = 'templedjspot';
+                    }
+                } catch (_) {}
 
                 if (linksEl) {
                     linksEl.innerHTML = services

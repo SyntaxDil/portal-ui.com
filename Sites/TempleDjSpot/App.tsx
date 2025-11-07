@@ -1114,6 +1114,7 @@ function DJPool({ djs, onDjClick, onDragStart, onDragOver, onDragEnter, onDragLe
                 onClick={() => onDjClick(dj)}
                 isDraggable={!disabled}
                 onDragStart={(e) => onDragStart(e, { from: 'pool', dj })}
+                showInvite={true}
               />
             </div>
           ))
@@ -1307,13 +1308,27 @@ function TimeSlot({ slot, slotIndex, allDjs, onDjClick, onDragStart, onDragOver,
 /**
  * Draggable/Clickable DJ Item
  */
-function DJItem({ dj, onClick, isDraggable, onDragStart }: {
+function DJItem({ dj, onClick, isDraggable, onDragStart, showInvite }: {
   dj: DJ;
   onClick: () => void;
   isDraggable: boolean;
   onDragStart: (e: React.DragEvent) => void;
+  showInvite?: boolean;
 }) {
+  const [copied, setCopied] = useState(false);
   const placeholder = `https://placehold.co/40x40/374151/9CA3AF?text=${encodeURIComponent(dj.djName?.charAt(0) || 'D')}`;
+  
+  const handleInvite = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    const inviteUrl = `${window.location.origin}/Registration.html?djName=${encodeURIComponent(dj.djName)}&realName=${encodeURIComponent(dj.realName)}`;
+    navigator.clipboard.writeText(inviteUrl).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }).catch(err => {
+      console.error('Failed to copy invite link:', err);
+    });
+  };
+
   return (
     <div
       draggable={isDraggable}
@@ -1333,6 +1348,19 @@ function DJItem({ dj, onClick, isDraggable, onDragStart }: {
         <p className="text-md font-semibold text-white truncate">{dj.djName}</p>
         <p className="text-sm text-gray-400 truncate">{dj.realName}</p>
       </div>
+      {showInvite && (
+        <button
+          onClick={handleInvite}
+          className={`ml-2 px-2 py-1 rounded text-xs font-medium transition-colors flex-shrink-0 ${
+            copied 
+              ? 'bg-green-600 text-white' 
+              : 'bg-blue-600 hover:bg-blue-700 text-white'
+          }`}
+          title="Copy invite link to clipboard"
+        >
+          {copied ? 'Copied!' : 'Invite'}
+        </button>
+      )}
     </div>
   );
 }
