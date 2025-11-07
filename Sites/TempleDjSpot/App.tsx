@@ -297,16 +297,25 @@ export default function App() {
     setDragCounter(prev => prev - 1);
   };
 
-  const handleDropOnSlot = async (e: React.DragEvent, targetSlotIndex: number) => {
+  const handleDropOnSlot = async (e: React.DragEvent, targetSlotIndex: number, targetStage?: StageType) => {
     e.preventDefault();
     setDragCounter(0);
     setIsLoading(true);
     
     try {
       const sourceData = JSON.parse(e.dataTransfer.getData('application/json')) as any;
-      const newTimeSlots = [...(schedule as Schedule).timeSlots];
       
-  const scheduleRef = doc(db!, `${sharedMode ? `apps/${appId}` : `users/${userId}/apps/${appId}`}/schedule/mainStage`);
+      // Determine which stage we're dropping onto
+      const stage = targetStage || currentStage;
+      const targetSchedule = stage === 'mainStage' ? schedule : 
+                            stage === 'dubPub' ? dubPubSchedule : 
+                            technoHubSchedule;
+      
+      if (!targetSchedule) return;
+      
+      const newTimeSlots = [...targetSchedule.timeSlots];
+      
+  const scheduleRef = doc(db!, `${sharedMode ? `apps/${appId}` : `users/${userId}/apps/${appId}`}/schedule/${stage}`);
 
       // If a range was dragged across, apply to entire range, but only when SHIFT is held
       // or when explicitly resizing using a handle
@@ -744,7 +753,7 @@ export default function App() {
             onDrop={handleDropOnUnassign}
             isDropZoneActive={dragCounter > 0}
             disabled={isLoading}
-            schedule={schedule}
+            allSchedules={[schedule, dubPubSchedule, technoHubSchedule]}
           />
         </aside>
 
@@ -837,6 +846,7 @@ export default function App() {
                   onMergeSlots={handleMergeSlots}
                   onUnmerge={handleUnmergeSlot}
                   onNameUpdate={(name) => updateScheduleName('mainStage', name)}
+                  stage="mainStage"
                 />
               )}
               {dubPubSchedule && (
@@ -861,6 +871,7 @@ export default function App() {
                   onMergeSlots={handleMergeSlots}
                   onUnmerge={handleUnmergeSlot}
                   onNameUpdate={(name) => updateScheduleName('dubPub', name)}
+                  stage="dubPub"
                 />
               )}
               {technoHubSchedule && (
@@ -885,6 +896,7 @@ export default function App() {
                   onMergeSlots={handleMergeSlots}
                   onUnmerge={handleUnmergeSlot}
                   onNameUpdate={(name) => updateScheduleName('technoHub', name)}
+                  stage="technoHub"
                 />
               )}
             </div>
@@ -910,6 +922,7 @@ export default function App() {
               onMergeSlots={handleMergeSlots}
               onUnmerge={handleUnmergeSlot}
               onNameUpdate={(name) => updateScheduleName(currentStage, name)}
+              stage={currentStage}
             />
           )}
         </section>
@@ -1404,7 +1417,7 @@ function AdminSettings({ db, userId, appId }: { db: ReturnType<typeof getFiresto
 /**
  * Unassigned DJ Pool
  */
-function DJPool({ djs, onDjClick, onDragStart, onDragOver, onDragEnter, onDragLeave, onDrop, isDropZoneActive, disabled, schedule }: {
+function DJPool({ djs, onDjClick, onDragStart, onDragOver, onDragEnter, onDragLeave, onDrop, isDropZoneActive, disabled, allSchedules }: {
   djs: DJ[];
   onDjClick: (dj: DJ) => void;
   onDragStart: (e: React.DragEvent, data: unknown) => void;
@@ -1414,14 +1427,20 @@ function DJPool({ djs, onDjClick, onDragStart, onDragOver, onDragEnter, onDragLe
   onDrop: (e: React.DragEvent) => void;
   isDropZoneActive: boolean;
   disabled: boolean;
-  schedule: Schedule | null;
+  allSchedules: (Schedule | null)[];
 }) {
-  // Helper: get assigned slots for a DJ
+  // Helper: get assigned slots for a DJ across all stages
   const getDjSlots = (djId: string) => {
-    if (!schedule) return [];
-    return schedule.timeSlots.filter(slot => 
-      slot.djId === djId || (slot.guests && slot.guests.some(g => g.djId === djId))
-    );
+    const slots: TimeSlot[] = [];
+    allSchedules.forEach(schedule => {
+      if (schedule) {
+        const djSlots = schedule.timeSlots.filter(slot => 
+          slot.djId === djId || (slot.guests && slot.guests.some(g => g.djId === djId))
+        );
+        slots.push(...djSlots);
+      }
+    });
+    return slots;
   };
   return (
     <div className="bg-gray-800 p-6 rounded-lg shadow-lg flex-grow">
@@ -1475,7 +1494,7 @@ function DJPool({ djs, onDjClick, onDragStart, onDragOver, onDragEnter, onDragLe
 /**
  * Schedule Board
  */
-function ScheduleBoard({ schedule, djs, onDjClick, onDragStart, onDragOver, onDragEnter, onDragEnterSlot, onDragLeave, onDrop, isDropZoneActive, disabled, activeRange, onReset, selectionMode, selectedSlots, onSlotClick, onToggleSelectionMode, onMergeSlots, onUnmerge, onNameUpdate }: {
+function ScheduleBoard({ schedule, djs, onDjClick, onDragStart, onDragOver, onDragEnter, onDragEnterSlot, onDragLeave, onDrop, isDropZoneActive, disabled, activeRange, onReset, selectionMode, selectedSlots, onSlotClick, onToggleSelectionMode, onMergeSlots, onUnmerge, onNameUpdate, stage }: {
   schedule: Schedule;
   djs: DJ[];
   onDjClick: (dj: DJ) => void;
@@ -1484,7 +1503,7 @@ function ScheduleBoard({ schedule, djs, onDjClick, onDragStart, onDragOver, onDr
   onDragEnter: (e: React.DragEvent) => void;
   onDragEnterSlot: (e: React.DragEvent, slotIndex: number) => void;
   onDragLeave: (e: React.DragEvent) => void;
-  onDrop: (e: React.DragEvent, slotIndex: number) => void;
+  onDrop: (e: React.DragEvent, slotIndex: number, stage?: StageType) => void;
   isDropZoneActive: boolean;
   disabled: boolean;
   activeRange: { start: number; end: number } | null;
@@ -1496,6 +1515,7 @@ function ScheduleBoard({ schedule, djs, onDjClick, onDragStart, onDragOver, onDr
   onMergeSlots: () => void;
   onUnmerge: (index: number) => void;
   onNameUpdate?: (newName: string) => Promise<void>;
+  stage?: StageType;
 }) {
   const [isEditingName, setIsEditingName] = useState(false);
   const [editedName, setEditedName] = useState(schedule.name);
@@ -1614,6 +1634,7 @@ function ScheduleBoard({ schedule, djs, onDjClick, onDragStart, onDragOver, onDr
               onSlotClick={onSlotClick}
               selectionMode={selectionMode}
               onUnmerge={onUnmerge}
+              stage={stage}
             />
           </div>
         ))}
@@ -1625,7 +1646,7 @@ function ScheduleBoard({ schedule, djs, onDjClick, onDragStart, onDragOver, onDr
 /**
  * Individual Time Slot
  */
-function TimeSlot({ slot, slotIndex, allDjs, onDjClick, onDragStart, onDragOver, onDragEnter, onDragEnterSlot, onDragLeave, onDrop, disabled, activeRange, isSelected, onSlotClick, selectionMode, onUnmerge }: {
+function TimeSlot({ slot, slotIndex, allDjs, onDjClick, onDragStart, onDragOver, onDragEnter, onDragEnterSlot, onDragLeave, onDrop, disabled, activeRange, isSelected, onSlotClick, selectionMode, onUnmerge, stage }: {
   slot: TimeSlot;
   slotIndex: number;
   allDjs: DJ[];
@@ -1635,13 +1656,14 @@ function TimeSlot({ slot, slotIndex, allDjs, onDjClick, onDragStart, onDragOver,
   onDragEnter: (e: React.DragEvent) => void;
   onDragEnterSlot: (e: React.DragEvent, slotIndex: number) => void;
   onDragLeave: (e: React.DragEvent) => void;
-  onDrop: (e: React.DragEvent, slotIndex: number) => void;
+  onDrop: (e: React.DragEvent, slotIndex: number, stage?: StageType) => void;
   disabled: boolean;
   activeRange: { start: number; end: number } | null;
   isSelected?: boolean;
   onSlotClick?: (index: number) => void;
   selectionMode?: boolean;
   onUnmerge?: (index: number) => void;
+  stage?: StageType;
 }) {
   const [isDragOver, setIsDragOver] = useState(false);
   const dj = slot.djId ? allDjs.find(d => d.id === slot.djId) || null : null;
@@ -1674,7 +1696,7 @@ function TimeSlot({ slot, slotIndex, allDjs, onDjClick, onDragStart, onDragOver,
     e.preventDefault();
     e.stopPropagation();
     setIsDragOver(false);
-    onDrop(e, slotIndex); // Notify parent with index
+    onDrop(e, slotIndex, stage); // Notify parent with index and stage
   };
 
   return (
