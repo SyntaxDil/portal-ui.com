@@ -3,7 +3,7 @@
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-app.js";
 import { getAuth, createUserWithEmailAndPassword, sendEmailVerification } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-auth.js";
-import { getFirestore, doc, setDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore.js";
+import { getFirestore, doc, setDoc, serverTimestamp, collection, query, where, getDocs, updateDoc } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore.js";
 
 const cfg = window.FIREBASE_CONFIG;
 if (!cfg) {
@@ -52,6 +52,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const email = document.getElementById('email').value.trim();
     const phone = document.getElementById('phone').value.trim();
     const serviceType = document.getElementById('serviceType').value;
+    const djName = document.getElementById('djName')?.value?.trim() || null;
 
     try {
       setSubmitting(form, true);
@@ -66,17 +67,37 @@ document.addEventListener('DOMContentLoaded', () => {
         email,
         phone,
         serviceType: serviceType || null,
+        djName: djName,
         createdAt: serverTimestamp()
       });
+
+      // If this is a DJ invite (djName provided), link the DJ profile
+      if (djName) {
+        try {
+          const djsRef = collection(db, 'apps/temple-djs/djs');
+          const q = query(djsRef, where('djName', '==', djName));
+          const snapshot = await getDocs(q);
+          if (!snapshot.empty) {
+            const djDoc = snapshot.docs[0];
+            await updateDoc(doc(db, `apps/temple-djs/djs/${djDoc.id}`), {
+              uid: cred.user.uid,
+              email: email
+            });
+            console.log('DJ profile linked:', djDoc.id);
+          }
+        } catch (linkErr) {
+          console.warn('Failed to link DJ profile:', linkErr);
+        }
+      }
 
       // Best-effort: send verification email
       try { await sendEmailVerification(cred.user); } catch (_) {}
 
       toast('Registration successful! Check your email for verification.');
       form.reset();
-      // Redirect to Hub after a short delay
+      // Redirect to DJ Dashboard if DJ, otherwise Hub
       setTimeout(() => {
-        window.location.href = '/hub.html';
+        window.location.href = djName ? '/dj-dashboard.html' : '/hub.html';
       }, 1200);
     } catch (err) {
       console.error(err);

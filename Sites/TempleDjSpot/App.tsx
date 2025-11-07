@@ -752,7 +752,12 @@ function DJRegistrationForm({ db, userId, appId, setIsLoading, setError, disable
   const djsCollectionPath = `${sharedMode ? `apps/${appId}` : `users/${userId}/apps/${appId}`}/djs`;
       await addDoc(collection(db, djsCollectionPath), {
         ...formData,
-        createdAt: new Date().toISOString()
+        createdAt: new Date().toISOString(),
+        // Store creator's UID/email so they can claim this profile later
+        createdBy: userId,
+        // Leave uid/email empty until DJ claims the profile by signing up
+        uid: null,
+        email: null
       });
       // Clear form
       setFormData({

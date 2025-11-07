@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="DJ Dashboard - Manage your profile and view your schedule" />
+  <title>DJ Dashboard - Portal UI</title>
+  <link rel="stylesheet" href="/css/styles.css" />
+  <link rel="icon" type="image/x-icon" href="/images/favicon.ico" />
+  <style>
+    .dashboard-container { max-width: 1200px; margin: 0 auto; padding: 20px; }
+    .profile-card { background: #111827; border: 1px solid #1f2937; border-radius: 10px; padding: 24px; margin-bottom: 24px; }
+    .profile-header { display: flex; align-items: center; gap: 24px; margin-bottom: 24px; }
+    .profile-photo { width: 120px; height: 120px; border-radius: 50%; object-fit: cover; border: 3px solid #3b82f6; }
+    .profile-info { flex: 1; }
+    .profile-name { font-size: 28px; font-weight: bold; color: #60a5fa; margin: 0 0 8px 0; }
+    .profile-real-name { font-size: 18px; color: #9ca3af; margin: 0; }
+    .edit-form { display: grid; gap: 16px; }
+    .form-row { display: flex; flex-direction: column; }
+    .form-row label { font-size: 14px; color: #9ca3af; margin-bottom: 6px; }
+    .form-row input, .form-row textarea { 
+      padding: 10px; 
+      border: 1px solid #374151; 
+      border-radius: 6px; 
+      background: #0a0f1a; 
+      color: white; 
+      font-family: inherit;
+    }
+    .form-row textarea { min-height: 100px; resize: vertical; }
+    .schedule-list { display: grid; gap: 12px; }
+    .schedule-item { 
+      background: #0a0f1a; 
+      border: 1px solid #1f2937; 
+      border-radius: 8px; 
+      padding: 16px; 
+      display: flex; 
+      justify-content: space-between; 
+      align-items: center;
+    }
+    .schedule-time { font-size: 16px; font-weight: bold; color: #60a5fa; }
+    .schedule-date { font-size: 14px; color: #9ca3af; }
+    .guest-badge { 
+      background: #374151; 
+      color: #9ca3af; 
+      padding: 4px 8px; 
+      border-radius: 4px; 
+      font-size: 12px; 
+      text-transform: uppercase;
+    }
+    .btn-save { 
+      padding: 12px 24px; 
+      background: #3b82f6; 
+      color: white; 
+      border: none; 
+      border-radius: 6px; 
+      cursor: pointer; 
+      font-size: 16px; 
+      font-weight: 600;
+    }
+    .btn-save:hover { background: #2563eb; }
+    .btn-save:disabled { background: #374151; cursor: not-allowed; }
+    .loading-spinner { text-align: center; padding: 40px; color: #9ca3af; }
+    .error-message { background: #7f1d1d; color: white; padding: 12px; border-radius: 6px; margin-bottom: 16px; }
+    .success-message { background: #065f46; color: white; padding: 12px; border-radius: 6px; margin-bottom: 16px; }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="container">
+      <a href="/" class="logo">Portal UI</a>
+      <nav>
+        <ul>
+          <li><a href="/hub.html">Hub</a></li>
+          <li><a href="/account.html">Account</a></li>
+        </ul>
+      </nav>
+      <div id="authStatus" aria-live="polite"></div>
+    </div>
+  </header>
+
+  <main>
+    <div class="dashboard-container">
+      <h1 style="text-align:center; color:#60a5fa; margin-bottom:32px;">DJ Dashboard</h1>
+
+      <!-- Auth Gate -->
+      <div id="authGate" style="display:none; text-align:center; padding:40px;">
+        <p style="color:#9ca3af; font-size:18px; margin-bottom:20px;">Please sign in to view your dashboard.</p>
+        <a href="/login.html?redirect=/dj-dashboard.html" class="btn btn-primary">Go to Login</a>
+      </div>
+
+      <!-- Loading State -->
+      <div id="loadingState" class="loading-spinner" style="display:none;">
+        <p>Loading your dashboard...</p>
+      </div>
+
+      <!-- Dashboard Content -->
+      <div id="dashboardContent" style="display:none;">
+        
+        <!-- Profile Card -->
+        <div class="profile-card">
+          <h2 style="margin-top:0; color:#60a5fa;">Your Profile</h2>
+          
+          <div id="messageArea"></div>
+
+          <div class="profile-header">
+            <img id="profilePhoto" src="" alt="DJ Photo" class="profile-photo" />
+            <div class="profile-info">
+              <h3 class="profile-name" id="profileDjName">—</h3>
+              <p class="profile-real-name" id="profileRealName">—</p>
+            </div>
+          </div>
+
+          <form id="profileForm" class="edit-form">
+            <div class="form-row">
+              <label for="photoUrl">Photo URL</label>
+              <input type="url" id="photoUrl" placeholder="https://example.com/photo.jpg" />
+              <small style="color:#6b7280; margin-top:4px;">Direct link to your DJ photo</small>
+            </div>
+
+            <div class="form-row">
+              <label for="visualUrl">Visual/Video URL</label>
+              <input type="url" id="visualUrl" placeholder="https://example.com/visual.mp4" />
+              <small style="color:#6b7280; margin-top:4px;">Link to your visual backdrop or promo video</small>
+            </div>
+
+            <div class="form-row">
+              <label for="info">Bio / Info</label>
+              <textarea id="info" placeholder="Tell us about yourself, your style, your music..."></textarea>
+            </div>
+
+            <button type="submit" class="btn-save" id="saveBtn">Save Changes</button>
+          </form>
+        </div>
+
+        <!-- Schedule Card -->
+        <div class="profile-card">
+          <h2 style="margin-top:0; color:#60a5fa;">Your Schedule</h2>
+          <div id="scheduleList" class="schedule-list">
+            <p style="color:#9ca3af;">No scheduled sets yet.</p>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </main>
+
+  <footer>
+    <div class="container">
+      <p>&copy; 2025 Portal UI. All rights reserved.</p>
+    </div>
+  </footer>
+
+  <script src="/js/main.js"></script>
+  <script src="/js/firebase-config.js"></script>
+  <script type="module" src="/js/auth-ui.js"></script>
+  <script type="module">
+    import { initializeApp, getApps, getApp } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-app.js";
+    import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-auth.js";
+    import { getFirestore, collection, query, where, getDocs, doc, updateDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore.js";
+
+    const cfg = window.FIREBASE_CONFIG;
+    if (!cfg) {
+      document.getElementById('authGate').style.display = 'block';
+      throw new Error('Firebase config missing');
+    }
+
+    const apps = getApps();
+    const app = apps.length ? getApp() : initializeApp(cfg);
+    const auth = getAuth(app);
+    const db = getFirestore(app);
+    const appId = 'temple-djs';
+
+    function show(el, visible) { if (el) el.style.display = visible ? '' : 'none'; }
+    function showMessage(msg, isError = false) {
+      const area = document.getElementById('messageArea');
+      if (!area) return;
+      area.innerHTML = `<div class="${isError ? 'error-message' : 'success-message'}">${msg}</div>`;
+      setTimeout(() => { area.innerHTML = ''; }, 3000);
+    }
+
+    onAuthStateChanged(auth, async (user) => {
+      const authGate = document.getElementById('authGate');
+      const loadingState = document.getElementById('loadingState');
+      const dashboardContent = document.getElementById('dashboardContent');
+
+      if (!user) {
+        show(authGate, true);
+        show(loadingState, false);
+        show(dashboardContent, false);
+        return;
+      }
+
+      show(authGate, false);
+      show(loadingState, true);
+      show(dashboardContent, false);
+
+      try {
+        // Find DJ profile by matching user email or UID
+        const djsRef = collection(db, `apps/${appId}/djs`);
+        const q = query(djsRef);
+        const snapshot = await getDocs(q);
+
+        let myDj = null;
+        snapshot.forEach(docSnap => {
+          const data = docSnap.data();
+          // Match by email or a custom uid field (if you store it)
+          // For now, let's match by realName or djName matching user displayName or a custom field
+          // Better: store uid when DJ registers
+          // Temporary: match by email stored in DJ doc (you'll need to add this when creating DJ)
+          if (data.email === user.email || data.uid === user.uid) {
+            myDj = { id: docSnap.id, ...data };
+          }
+        });
+
+        if (!myDj) {
+          // No DJ profile found—show message
+          show(loadingState, false);
+          show(dashboardContent, true);
+          document.getElementById('profileDjName').textContent = 'No DJ Profile';
+          document.getElementById('profileRealName').textContent = 'You are not registered as a DJ yet.';
+          document.getElementById('profileForm').style.display = 'none';
+          return;
+        }
+
+        // Load DJ profile
+        document.getElementById('profileDjName').textContent = myDj.djName || '—';
+        document.getElementById('profileRealName').textContent = myDj.realName || '—';
+        document.getElementById('photoUrl').value = myDj.photoUrl || '';
+        document.getElementById('visualUrl').value = myDj.visualUrl || '';
+        document.getElementById('info').value = myDj.info || '';
+        const photoEl = document.getElementById('profilePhoto');
+        photoEl.src = myDj.photoUrl || `https://placehold.co/120x120/374151/9CA3AF?text=${encodeURIComponent((myDj.djName || 'DJ').charAt(0))}`;
+
+        // Load schedule
+        const scheduleRef = doc(db, `apps/${appId}/schedule/mainStage`);
+        onSnapshot(scheduleRef, (scheduleSnap) => {
+          if (!scheduleSnap.exists()) {
+            document.getElementById('scheduleList').innerHTML = '<p style="color:#9ca3af;">No schedule available.</p>';
+            return;
+          }
+          const scheduleData = scheduleSnap.data();
+          const timeSlots = scheduleData.timeSlots || [];
+          const mySlots = timeSlots.filter(slot => 
+            slot.djId === myDj.id || (slot.guests && slot.guests.some(g => g.djId === myDj.id))
+          );
+
+          if (mySlots.length === 0) {
+            document.getElementById('scheduleList').innerHTML = '<p style="color:#9ca3af;">No scheduled sets yet.</p>';
+          } else {
+            document.getElementById('scheduleList').innerHTML = mySlots.map(slot => {
+              const isGuest = slot.djId !== myDj.id;
+              return `
+                <div class="schedule-item">
+                  <div>
+                    <div class="schedule-time">${slot.time}</div>
+                    <div class="schedule-date">${scheduleData.name || 'Temple - 31 Jan 2025'}</div>
+                  </div>
+                  ${isGuest ? '<span class="guest-badge">Guest</span>' : '<span class="guest-badge" style="background:#065f46;">Main Set</span>'}
+                </div>
+              `;
+            }).join('');
+          }
+        });
+
+        // Save profile form
+        document.getElementById('profileForm').addEventListener('submit', async (e) => {
+          e.preventDefault();
+          const saveBtn = document.getElementById('saveBtn');
+          saveBtn.disabled = true;
+          saveBtn.textContent = 'Saving...';
+
+          try {
+            const djDocRef = doc(db, `apps/${appId}/djs/${myDj.id}`);
+            await updateDoc(djDocRef, {
+              photoUrl: document.getElementById('photoUrl').value.trim(),
+              visualUrl: document.getElementById('visualUrl').value.trim(),
+              info: document.getElementById('info').value.trim()
+            });
+            showMessage('Profile updated successfully!');
+            // Update photo preview
+            const newPhotoUrl = document.getElementById('photoUrl').value.trim();
+            if (newPhotoUrl) photoEl.src = newPhotoUrl;
+          } catch (err) {
+            console.error('Error updating profile:', err);
+            showMessage('Failed to update profile: ' + (err.message || 'Unknown error'), true);
+          } finally {
+            saveBtn.disabled = false;
+            saveBtn.textContent = 'Save Changes';
+          }
+        });
+
+        show(loadingState, false);
+        show(dashboardContent, true);
+
+      } catch (err) {
+        console.error('Error loading dashboard:', err);
+        show(loadingState, false);
+        show(authGate, true);
+      }
+    });
+  </script>
+</body>
+</html>
