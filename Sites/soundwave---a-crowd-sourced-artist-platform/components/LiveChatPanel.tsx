@@ -112,7 +112,7 @@ const LiveChatPanel: React.FC = () => {
             {/* Input Form */}
             <div className="p-4 bg-gray-700/50 border-t border-gray-700">
                 <form onSubmit={handleSendMessage} className="flex gap-3 items-center">
-                    <img src={currentUser.avatarUrl} alt="Your avatar" className="w-8 h-8 rounded-full" />
+                    <img src={currentUser?.avatarUrl || 'https://api.dicebear.com/7.x/avataaars/svg?seed=default'} alt="Your avatar" className="w-8 h-8 rounded-full" />
                     <input
                         type="text"
                         value={newMessage}
