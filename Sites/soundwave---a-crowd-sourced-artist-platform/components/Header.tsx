@@ -1,9 +1,13 @@
-
 import React from 'react';
 import { NavLink, Link } from 'react-router-dom';
 import { Icon } from './Icon';
+import { User } from '../types';
 
-const Header: React.FC = () => {
+interface HeaderProps {
+  currentUser?: User | null;
+}
+
+const Header: React.FC<HeaderProps> = ({ currentUser }) => {
   const activeLinkStyle = {
     color: 'white',
     backgroundColor: '#282828'
@@ -113,9 +117,13 @@ const Header: React.FC = () => {
                 <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-xs font-bold text-white">3</span>
             </Link>
 
-            <Link to="/profile/user_1" className="flex items-center space-x-2">
-              <img className="h-8 w-8 rounded-full object-cover" src="https://picsum.photos/id/1015/100/100" alt="User Avatar" />
-              <span className="text-white font-medium hidden sm:block">Sub-Tropical</span>
+            <Link to={`/profile/${currentUser?.id || 'user_1'}`} className="flex items-center space-x-2">
+              <img 
+                className="h-8 w-8 rounded-full object-cover" 
+                src={currentUser?.avatarUrl || 'https://picsum.photos/id/1015/100/100'} 
+                alt={`${currentUser?.name || 'User'} Avatar`} 
+              />
+              <span className="text-white font-medium hidden sm:block">{currentUser?.name || 'Guest'}</span>
             </Link>
           </div>
         </div>

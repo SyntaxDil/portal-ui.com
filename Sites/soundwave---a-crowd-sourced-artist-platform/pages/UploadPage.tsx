@@ -1,87 +1,109 @@
-
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { User } from '../types';
+import { auth, getUserById, createOrUpdateUser } from '../services/firebaseService';
 import Button from '../components/Button';
 import { Icon } from '../components/Icon';
-import { UploadType } from '../types';
+import Spinner from '../components/Spinner';
 
-const UploadPage: React.FC = () => {
-  const [title, setTitle] = useState('');
-  const [description, setDescription] = useState('');
-  const [uploadType, setUploadType] = useState<UploadType>(UploadType.PREVIEW);
-  const [price, setPrice] = useState(0.99);
-  const [tags, setTags] = useState('');
-  const [isUploading, setIsUploading] = useState(false);
-  const [uploadSuccess, setUploadSuccess] = useState(false);
+const ProfileSettingsPage: React.FC = () => {
+  const navigate = useNavigate();
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [user, setUser] = useState<User | null>(null);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
+  const [artistName, setArtistName] = useState('');
+  const [bio, setBio] = useState('');
+  const [genre, setGenre] = useState('');
+  const [location, setLocation] = useState('');
+  const [spotifyUrl, setSpotifyUrl] = useState('');
+  const [soundcloudUrl, setSoundcloudUrl] = useState('');
+  const [instagramUrl, setInstagramUrl] = useState('');
+  const [twitterUrl, setTwitterUrl] = useState('');
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsUploading(true);
-    // Simulate upload process
-    setTimeout(() => {
-        setIsUploading(false);
-        setUploadSuccess(true);
-        // Here you would typically add the new track to a global state or send to a backend
-        console.log({ title, description, uploadType, price: uploadType === 'For Sale' ? price : 0, tags: tags.split(',') });
-        setTimeout(() => setUploadSuccess(false), 3000);
-    }, 1500);
+  useEffect(() => {
+    const loadProfile = async () => {
+      const currentUser = auth.currentUser;
+      if (!currentUser) {
+        navigate('/');
+        return;
+      }
+      try {
+        const profile = await getUserById(currentUser.uid);
+        if (profile) {
+          setUser(profile);
+          setArtistName(profile.name || '');
+          setBio(profile.bio || '');
+          setGenre(profile.genre || '');
+          setLocation(profile.location || '');
+          setSpotifyUrl(profile.spotifyUrl || '');
+          setSoundcloudUrl(profile.soundcloudUrl || '');
+          setInstagramUrl(profile.instagramUrl || '');
+          setTwitterUrl(profile.twitterUrl || '');
+        }
+      } catch (err) {
+        console.error('Error loading profile:', err);
+        setError('Failed to load profile');
+      } finally {
+        setLoading(false);
+      }
+    };
+    loadProfile();
+  }, [navigate]);
+
+  const handleSave = async () => {
+    if (!user) return;
+    setSaving(true);
+    setError('');
+    setSuccess('');
+    try {
+      const updatedData: Partial<User> = {
+        id: user.id,
+        name: artistName,
+        bio: bio,
+        genre: genre,
+        location: location,
+        spotifyUrl: spotifyUrl || undefined,
+        soundcloudUrl: soundcloudUrl || undefined,
+        instagramUrl: instagramUrl || undefined,
+        twitterUrl: twitterUrl || undefined,
+      };
+      await createOrUpdateUser(updatedData);
+      setSuccess('Profile updated successfully!');
+      setTimeout(() => navigate(`/profile/${user.id}`), 1500);
+    } catch (err: any) {
+      console.error('Error saving profile:', err);
+      setError(err.message || 'Failed to save profile');
+    } finally {
+      setSaving(false);
+    }
   };
+
+  if (loading) return <Spinner />;
+  if (!user) return <div className="text-center text-white py-20"><p>Profile not found</p></div>;
 
   return (
     <div className="max-w-4xl mx-auto text-white">
-      <h1 className="text-3xl font-bold mb-2">Upload Your Track</h1>
-      <p className="text-gray-400 mb-8">Share your music with the world. Fill out the details below.</p>
-      
-      {uploadSuccess && (
-        <div className="bg-green-500/20 border border-green-500 text-green-300 px-4 py-3 rounded-lg relative mb-6" role="alert">
-          <strong className="font-bold">Success!</strong>
-          <span className="block sm:inline"> Your track has been uploaded.</span>
-        </div>
-      )}
-
-      <form onSubmit={handleSubmit} className="space-y-8">
-        <div className="bg-gray-800 p-8 rounded-lg shadow-lg">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="col-span-1">
-              <label htmlFor="track-title" className="block text-sm font-medium text-gray-400 mb-2">Track Title</label>
-              <input type="text" id="track-title" value={title} onChange={e => setTitle(e.target.value)} required className="w-full bg-gray-700 border border-gray-600 rounded-md py-2 px-4 focus:ring-brand-accent focus:border-brand-accent transition" />
-            </div>
-            <div className="col-span-1">
-               <label htmlFor="tags" className="block text-sm font-medium text-gray-400 mb-2">Tags (comma-separated)</label>
-              <input type="text" id="tags" value={tags} onChange={e => setTags(e.target.value)} placeholder="e.g. lofi, chill, electronic" className="w-full bg-gray-700 border border-gray-600 rounded-md py-2 px-4 focus:ring-brand-accent focus:border-brand-accent transition" />
-            </div>
-          </div>
-          <div className="mt-6">
-            <label htmlFor="description" className="block text-sm font-medium text-gray-400 mb-2">Description</label>
-            <textarea id="description" value={description} onChange={e => setDescription(e.target.value)} rows={6} required placeholder="Describe your track, the vibe, the inspiration..." className="w-full bg-gray-700 border border-gray-600 rounded-md py-2 px-4 focus:ring-brand-accent focus:border-brand-accent transition"></textarea>
-          </div>
-
-          <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-6">
-             <div>
-              <label className="block text-sm font-medium text-gray-400 mb-2">Upload Type</label>
-              <select value={uploadType} onChange={e => setUploadType(e.target.value as UploadType)} className="w-full bg-gray-700 border border-gray-600 rounded-md py-2 px-4 focus:ring-brand-accent focus:border-brand-accent transition">
-                <option value={UploadType.PREVIEW}>Preview Only</option>
-                <option value={UploadType.FREE}>Free Download</option>
-                <option value={UploadType.SALE}>For Sale</option>
-              </select>
-            </div>
-            {uploadType === 'For Sale' && (
-              <div>
-                <label htmlFor="price" className="block text-sm font-medium text-gray-400 mb-2">Price (USD)</label>
-                <input type="number" id="price" value={price} onChange={e => setPrice(Number(e.target.value))} min="0.50" step="0.01" className="w-full bg-gray-700 border border-gray-600 rounded-md py-2 px-4 focus:ring-brand-accent focus:border-brand-accent transition" />
-              </div>
-            )}
-          </div>
-        </div>
-        
-        <div className="flex justify-end">
-          <Button type="submit" isLoading={isUploading}>
-            <Icon name="upload" className="w-5 h-5 mr-2" />
-            Upload Track
-          </Button>
-        </div>
-      </form>
+      <div className="mb-8">
+        <button onClick={() => navigate(`/profile/${user.id}`)} className="flex items-center text-gray-400 hover:text-white transition-colors mb-4">
+          <Icon name="arrow-left" className="w-5 h-5 mr-2" />Back to Profile
+        </button>
+        <h1 className="text-4xl font-bold">Edit Profile</h1>
+        <p className="text-gray-400 mt-2">Update your SoundWave artist profile</p>
+      </div>
+      {error && <div className="mb-6 p-4 bg-red-500/10 border border-red-500 rounded-lg text-red-500">{error}</div>}
+      {success && <div className="mb-6 p-4 bg-green-500/10 border border-green-500 rounded-lg text-green-500">{success}</div>}
+      <div className="bg-gray-800 rounded-lg p-8 space-y-6">
+        <div><label className="block text-sm font-medium mb-2">Artist Name *</label><input type="text" value={artistName} onChange={(e) => setArtistName(e.target.value)} className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-3 text-white focus:ring-2 focus:ring-brand-accent focus:border-transparent" placeholder="Your artist name" /></div>
+        <div><label className="block text-sm font-medium mb-2">Bio *</label><textarea value={bio} onChange={(e) => setBio(e.target.value)} rows={4} className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-3 text-white focus:ring-2 focus:ring-brand-accent focus:border-transparent" placeholder="Tell us about yourself and your music..." /><p className="text-sm text-gray-400 mt-1">{bio.length}/500 characters</p></div>
+        <div><label className="block text-sm font-medium mb-2">Primary Genre *</label><input type="text" value={genre} onChange={(e) => setGenre(e.target.value)} className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-3 text-white focus:ring-2 focus:ring-brand-accent focus:border-transparent" placeholder="e.g., Drum & Bass, House, Techno" /></div>
+        <div><label className="block text-sm font-medium mb-2">Location</label><input type="text" value={location} onChange={(e) => setLocation(e.target.value)} className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-3 text-white focus:ring-2 focus:ring-brand-accent focus:border-transparent" placeholder="e.g., Los Angeles, CA" /></div>
+        <div className="border-t border-gray-700 pt-6"><h3 className="text-xl font-semibold mb-4">Social Links (Optional)</h3><div className="space-y-4"><div><label className="block text-sm font-medium mb-2">Spotify</label><input type="url" value={spotifyUrl} onChange={(e) => setSpotifyUrl(e.target.value)} className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-3 text-white focus:ring-2 focus:ring-brand-accent focus:border-transparent" placeholder="https://open.spotify.com/artist/..." /></div><div><label className="block text-sm font-medium mb-2">SoundCloud</label><input type="url" value={soundcloudUrl} onChange={(e) => setSoundcloudUrl(e.target.value)} className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-3 text-white focus:ring-2 focus:ring-brand-accent focus:border-transparent" placeholder="https://soundcloud.com/..." /></div><div><label className="block text-sm font-medium mb-2">Instagram</label><input type="url" value={instagramUrl} onChange={(e) => setInstagramUrl(e.target.value)} className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-3 text-white focus:ring-2 focus:ring-brand-accent focus:border-transparent" placeholder="https://instagram.com/..." /></div><div><label className="block text-sm font-medium mb-2">Twitter/X</label><input type="url" value={twitterUrl} onChange={(e) => setTwitterUrl(e.target.value)} className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-3 text-white focus:ring-2 focus:ring-brand-accent focus:border-transparent" placeholder="https://twitter.com/..." /></div></div></div>
+        <div className="flex gap-4 pt-6 border-t border-gray-700"><Button onClick={handleSave} disabled={saving || !artistName || !bio || !genre} className="flex-1">{saving ? 'Saving...' : 'Save Changes'}</Button><Button onClick={() => navigate(`/profile/${user.id}`)} variant="secondary">Cancel</Button></div>
+      </div>
     </div>
   );
 };
 
-export default UploadPage;
+export default ProfileSettingsPage;

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useLocation, Link } from 'react-router-dom';
 import { User, Track, ExternalRelease, PremiumPack, RekordboxTrack, Comment } from '../types';
-import { getUserById, getTracksByArtist, getExternalReleasesByArtist, getPremiumPacksByArtist, addCommentToTrack } from '../services/firebaseService';
+import { getUserById, getTracksByArtist, getExternalReleasesByArtist, getPremiumPacksByArtist, addCommentToTrack, auth } from '../services/firebaseService';
 import Spinner from '../components/Spinner';
 import TrackCard from '../components/TrackCard';
 import ArtistReleasesPanel from '../components/ArtistReleasesPanel';
@@ -26,6 +26,14 @@ const ProfilePage: React.FC = () => {
   const [activeTab, setActiveTab] = useState<ProfileTab>('tracks');
   const [isFollowing, setIsFollowing] = useState(false);
   const [commentModalTarget, setCommentModalTarget] = useState<Track | null>(null);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+
+  useEffect(() => {
+    const unsubscribe = auth.onAuthStateChanged((user) => {
+      setCurrentUserId(user?.uid || null);
+    });
+    return () => unsubscribe();
+  }, []);
 
   useEffect(() => {
     if (location.state?.collection) {
@@ -154,14 +162,28 @@ const ProfilePage: React.FC = () => {
         <img src={user.avatarUrl} alt={user.name} className="w-40 h-40 rounded-full object-cover border-4 border-gray-700 flex-shrink-0" />
         <div className="flex-grow w-full">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-            <h1 className="text-4xl font-bold">{user.name}</h1>
-            <Button
-              onClick={handleFollowToggle}
-              variant={isFollowing ? 'secondary' : 'primary'}
-              className="w-full sm:w-auto flex-shrink-0"
-            >
-              {isFollowing ? 'Following' : 'Follow'}
-            </Button>
+            <div className="flex items-center gap-3">
+              <h1 className="text-4xl font-bold">{user.name}</h1>
+              {user.isVerified && (
+                <Icon name="check-circle" className="w-6 h-6 text-brand-accent" title="Verified Artist" />
+              )}
+            </div>
+            {currentUserId === userId ? (
+              <Link to="/settings/profile">
+                <Button variant="secondary" className="w-full sm:w-auto flex-shrink-0">
+                  <Icon name="settings" className="w-4 h-4 mr-2" />
+                  Edit Profile
+                </Button>
+              </Link>
+            ) : (
+              <Button
+                onClick={handleFollowToggle}
+                variant={isFollowing ? 'secondary' : 'primary'}
+                className="w-full sm:w-auto flex-shrink-0"
+              >
+                {isFollowing ? 'Following' : 'Follow'}
+              </Button>
+            )}
           </div>
           <p className="text-gray-400 mt-2 max-w-xl">{user.bio}</p>
         </div>

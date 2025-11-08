@@ -7,6 +7,7 @@ import AudioPlayer from './components/AudioPlayer';
 import HomePage from './pages/HomePage';
 import ProfilePage from './pages/ProfilePage';
 import UploadPage from './pages/UploadPage';
+const ProfileSettingsPage = UploadPage; // Using UploadPage as ProfileSettingsPage temporarily
 import CommunityPage from './pages/CommunityPage';
 import GlobalChat from './components/GlobalChat';
 import LibraryPage from './pages/LibraryPage';
@@ -132,6 +133,7 @@ function App(): React.ReactNode {
             <Route path="/masterclass" element={<MasterclassPage />} />
             <Route path="/samples" element={<SamplesPage />} />
             <Route path="/profile/:userId" element={<ProfilePage />} />
+            <Route path="/settings/profile" element={<ProfileSettingsPage />} />
             <Route path="/upload" element={<UploadPage />} />
             <Route path="/import-collection" element={<ImportCollectionPage />} />
             <Route path="/inbox" element={<InboxPage />} />
