@@ -7,7 +7,7 @@ import LiveChatPanel from '../components/LiveChatPanel';
 import GlobalizerPanel from '../components/GlobalizerPanel';
 import CommentModal from '../components/CommentModal';
 import { Track, Post, Comment } from '../types';
-import { getTracks, getPosts, addCommentToTrack } from '../services/mockData';
+import { getTracks, getPosts, addCommentToTrack } from '../services/firebaseService';
 
 const HomePage: React.FC = () => {
   const [tracks, setTracks] = useState<Track[]>([]);

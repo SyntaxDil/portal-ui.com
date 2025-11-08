@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { Post, Comment } from '../types';
 import { Icon } from './Icon';
 import CommentSection from './CommentSection';
-import { addReplyToPost } from '../services/mockData';
+import { addReplyToPost } from '../services/firebaseService';
 
 interface PostCardProps {
   post: Post;

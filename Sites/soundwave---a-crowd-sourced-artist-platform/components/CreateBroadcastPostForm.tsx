@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Post, PostAudience } from '../types';
-import { addPost } from '../services/mockData';
+import { addPost } from '../services/firebaseService';
 import Button from './Button';
 import { Icon } from './Icon';
 

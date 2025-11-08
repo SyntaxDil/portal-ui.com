@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { LiveRoom } from '../types';
-import { getLiveRooms } from '../services/mockData';
+import { getLiveRooms } from '../services/firebaseService';
 import Spinner from '../components/Spinner';
 import LiveStreamView from '../components/LiveStreamView';
 import LiveStreamCard from '../components/LiveStreamCard';

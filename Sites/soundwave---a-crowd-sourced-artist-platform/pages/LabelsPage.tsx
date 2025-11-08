@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Label } from '../types';
-import { getLabels } from '../services/mockData';
+import { getLabels } from '../services/firebaseService';
 import Spinner from '../components/Spinner';
 import LabelCard from '../components/LabelCard';
 

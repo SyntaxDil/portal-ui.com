@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Post } from '../types';
-import { getPosts } from '../services/mockData';
+import { getPosts } from '../services/firebaseService';
 import Spinner from '../components/Spinner';
 import PostCard from '../components/PostCard';
 import CreatePostForm from '../components/CreatePostForm';

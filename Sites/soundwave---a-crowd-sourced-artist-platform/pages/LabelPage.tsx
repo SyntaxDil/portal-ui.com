@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { Label, Track, User, Post, LabelEvent, Opportunity, LabelTheme, Comment } from '../types';
-import { getLabelById, getTracksByLabelId, getArtistsByLabelId, getPostsByLabelId, getEventsByLabelId, addCommentToTrack, addCommentToLabel } from '../services/mockData';
+import { getLabelById, getTracksByLabelId, getArtistsByLabelId, getPostsByLabelId, getEventsByLabelId, addCommentToTrack, addCommentToLabel } from '../services/firebaseService';
 import { generateLabelTheme } from '../services/geminiService';
 import Spinner from '../components/Spinner';
 import Button from '../components/Button';

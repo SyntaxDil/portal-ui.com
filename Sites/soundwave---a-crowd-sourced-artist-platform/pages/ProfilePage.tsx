@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useLocation, Link } from 'react-router-dom';
 import { User, Track, ExternalRelease, PremiumPack, RekordboxTrack, Comment } from '../types';
-import { getUserById, getTracksByArtist, getExternalReleasesByArtist, getPremiumPacksByArtist, addCommentToTrack } from '../services/mockData';
+import { getUserById, getTracksByArtist, getExternalReleasesByArtist, getPremiumPacksByArtist, addCommentToTrack } from '../services/firebaseService';
 import Spinner from '../components/Spinner';
 import TrackCard from '../components/TrackCard';
 import ArtistReleasesPanel from '../components/ArtistReleasesPanel';

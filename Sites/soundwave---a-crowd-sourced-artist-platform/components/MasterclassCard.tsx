@@ -3,7 +3,7 @@ import { Masterclass, Comment } from '../types';
 import { Icon } from './Icon';
 import Button from './Button';
 import CommentSection from './CommentSection';
-import { addCommentToMasterclass } from '../services/mockData';
+import { addCommentToMasterclass } from '../services/firebaseService';
 
 interface MasterclassCardProps {
   masterclass: Masterclass;

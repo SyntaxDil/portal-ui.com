@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useContext } from 'react';
 import { Link } from 'react-router-dom';
 import { RadioStation, Track, CommunityPlaylist, Comment } from '../types';
-import { getRadioStations, getTracks, getCommunityPlaylists, addCommentToPlaylist } from '../services/mockData';
+import { getRadioStations, getTracks, getCommunityPlaylists, addCommentToPlaylist } from '../services/firebaseService';
 import { generateAIDJCommentary } from '../services/geminiService';
 import { AudioContext } from '../context/AudioContext';
 import Spinner from '../components/Spinner';

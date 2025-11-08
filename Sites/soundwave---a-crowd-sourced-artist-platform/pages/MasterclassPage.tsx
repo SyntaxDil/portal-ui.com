@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Masterclass } from '../types';
-import { getMasterclasses } from '../services/mockData';
+import { getMasterclasses } from '../services/firebaseService';
 import Spinner from '../components/Spinner';
 import MasterclassCard from '../components/MasterclassCard';
 

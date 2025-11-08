@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { SamplePack, Comment } from '../types';
 import { Icon } from './Icon';
 import CommentSection from './CommentSection';
-import { addCommentToSamplePack } from '../services/mockData';
+import { addCommentToSamplePack } from '../services/firebaseService';
 
 const SamplePackCard: React.FC<{ pack: SamplePack }> = ({ pack: initialPack }) => {
   const [pack, setPack] = useState(initialPack);

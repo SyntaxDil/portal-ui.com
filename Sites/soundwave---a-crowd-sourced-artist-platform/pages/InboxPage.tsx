@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Conversation, DirectMessage, User, Post } from '../types';
-import { getConversations } from '../services/mockData';
+import { getConversations } from '../services/firebaseService';
 import Spinner from '../components/Spinner';
 import { Icon } from '../components/Icon';
 import CreateBroadcastPostForm from '../components/CreateBroadcastPostForm';

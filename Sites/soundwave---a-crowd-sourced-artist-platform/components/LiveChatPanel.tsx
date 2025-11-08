@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { ChatMessage, User } from '../types';
-import { getUsers, getSampleChatMessages } from '../services/mockData';
+import { getUsers, getSampleChatMessages } from '../services/firebaseService';
 import { Icon } from './Icon';
 
 const LiveChatPanel: React.FC = () => {

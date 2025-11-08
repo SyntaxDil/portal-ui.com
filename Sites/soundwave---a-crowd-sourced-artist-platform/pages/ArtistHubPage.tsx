@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useContext, useMemo } from 'react';
 import { QueuedTrack, LiveRoom, Track, CommunityPlaylist, Comment } from '../types';
-import { getLiveRooms, getTracks, getCommunityPlaylists, addCommentToTrack } from '../services/mockData';
+import { getLiveRooms, getTracks, getCommunityPlaylists, addCommentToTrack } from '../services/firebaseService';
 import { AudioContext } from '../context/AudioContext';
 import Spinner from '../components/Spinner';
 import Button from '../components/Button';

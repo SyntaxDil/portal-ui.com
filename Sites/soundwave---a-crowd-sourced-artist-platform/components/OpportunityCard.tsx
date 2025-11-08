@@ -3,7 +3,7 @@ import { Opportunity, Comment } from '../types';
 import Button from './Button';
 import { Icon } from './Icon';
 import CommentSection from './CommentSection';
-import { addCommentToOpportunity } from '../services/mockData';
+import { addCommentToOpportunity } from '../services/firebaseService';
 
 interface OpportunityCardProps {
   opportunity: Opportunity;

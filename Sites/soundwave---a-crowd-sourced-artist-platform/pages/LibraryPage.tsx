@@ -3,7 +3,7 @@ import TrackCard from '../components/TrackCard';
 import Spinner from '../components/Spinner';
 import CommentModal from '../components/CommentModal';
 import { Track, Comment } from '../types';
-import { getTracks, addCommentToTrack } from '../services/mockData';
+import { getTracks, addCommentToTrack } from '../services/firebaseService';
 
 const LibraryPage: React.FC = () => {
   const [tracks, setTracks] = useState<Track[]>([]);

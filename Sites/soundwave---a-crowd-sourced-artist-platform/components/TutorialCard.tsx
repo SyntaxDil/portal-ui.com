@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { Tutorial, Comment } from '../types';
 import { Icon } from './Icon';
 import CommentSection from './CommentSection';
-import { addCommentToTutorial } from '../services/mockData';
+import { addCommentToTutorial } from '../services/firebaseService';
 
 const TutorialCard: React.FC<{ tutorial: Tutorial }> = ({ tutorial: initialTutorial }) => {
   const [tutorial, setTutorial] = useState(initialTutorial);

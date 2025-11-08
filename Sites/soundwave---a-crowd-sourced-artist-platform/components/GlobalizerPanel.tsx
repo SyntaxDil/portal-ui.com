@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { GlobalEvent, GlobalEventType, GlobalizerMode, UniverseGroup, Comment } from '../types';
-import { getGlobalEvents, addCommentToGlobalEvent } from '../services/mockData';
+import { getGlobalEvents, addCommentToGlobalEvent } from '../services/firebaseService';
 import { Icon } from './Icon';
 import Spinner from './Spinner';
 import CommentModal from './CommentModal';

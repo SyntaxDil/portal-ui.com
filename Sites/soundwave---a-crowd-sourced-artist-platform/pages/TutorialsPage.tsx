@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Tutorial } from '../types';
-import { getTutorials } from '../services/mockData';
+import { getTutorials } from '../services/firebaseService';
 import Spinner from '../components/Spinner';
 import TutorialCard from '../components/TutorialCard';
 

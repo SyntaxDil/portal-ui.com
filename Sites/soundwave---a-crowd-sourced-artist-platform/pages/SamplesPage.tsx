@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { SamplePack } from '../types';
-import { getSamplePacks } from '../services/mockData';
+import { getSamplePacks } from '../services/firebaseService';
 import Spinner from '../components/Spinner';
 import SamplePackCard from '../components/SamplePackCard';
 
