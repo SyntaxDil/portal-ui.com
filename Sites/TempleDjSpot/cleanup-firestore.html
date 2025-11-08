@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Firestore Cleanup Utility</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-900 text-white p-8">
+  <div class="max-w-2xl mx-auto">
+    <h1 class="text-3xl font-bold mb-6">🧹 Firestore Cleanup Utility</h1>
+    
+    <div class="bg-gray-800 p-6 rounded-lg mb-6">
+      <h2 class="text-xl font-semibold mb-4">Remove Specific DJ from All Schedules</h2>
+      <div class="space-y-4">
+        <div>
+          <label class="block text-sm mb-2">DJ Name to Remove:</label>
+          <input 
+            id="djNameInput" 
+            type="text" 
+            placeholder="e.g., Matala"
+            class="w-full p-2 bg-gray-700 rounded border border-gray-600 text-white"
+          />
+        </div>
+        <button 
+          onclick="removeDjByName()" 
+          class="px-4 py-2 bg-red-600 hover:bg-red-700 rounded font-medium"
+        >
+          Remove DJ from All Stages
+        </button>
+      </div>
+    </div>
+
+    <div class="bg-gray-800 p-6 rounded-lg mb-6">
+      <h2 class="text-xl font-semibold mb-4">Clean All Guests Arrays</h2>
+      <p class="text-sm text-gray-400 mb-4">Remove all guest DJs from all slots across all stages (keeps main DJs)</p>
+      <button 
+        onclick="cleanAllGuests()" 
+        class="px-4 py-2 bg-yellow-600 hover:bg-yellow-700 rounded font-medium"
+      >
+        Clean All Guests
+      </button>
+    </div>
+
+    <div class="bg-gray-800 p-6 rounded-lg mb-6">
+      <h2 class="text-xl font-semibold mb-4">Reset Specific Stage</h2>
+      <div class="space-y-4">
+        <select id="stageSelect" class="w-full p-2 bg-gray-700 rounded border border-gray-600 text-white">
+          <option value="mainStage">Temple (Main Stage)</option>
+          <option value="dubPub">Dub Pub</option>
+          <option value="technoHub">Techno Hub</option>
+        </select>
+        <button 
+          onclick="resetStage()" 
+          class="px-4 py-2 bg-orange-600 hover:bg-orange-700 rounded font-medium"
+        >
+          Reset Stage (Clear All Slots)
+        </button>
+      </div>
+    </div>
+
+    <div id="output" class="bg-gray-800 p-4 rounded-lg min-h-32 font-mono text-sm text-green-400"></div>
+  </div>
+
+  <script type="module">
+    import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js';
+    import { getFirestore, doc, getDoc, updateDoc } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyAkIjtyaYwcTPsFcDfJsoyQgRzCakgd1ic",
+      authDomain: "portal-ui-1eac6.firebaseapp.com",
+      projectId: "portal-ui-1eac6",
+      storageBucket: "portal-ui-1eac6.firebasestorage.app",
+      messagingSenderId: "234949673103",
+      appId: "1:234949673103:web:c502f79df4b040305f30fa"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+    const appId = 'temple-djs';
+
+    function log(msg) {
+      const output = document.getElementById('output');
+      output.innerHTML += msg + '\n';
+      output.scrollTop = output.scrollHeight;
+    }
+
+    window.removeDjByName = async function() {
+      const djName = document.getElementById('djNameInput').value.trim();
+      if (!djName) {
+        alert('Please enter a DJ name');
+        return;
+      }
+
+      log(`\n🔍 Searching for DJ: ${djName}...`);
+      
+      const stages = ['mainStage', 'dubPub', 'technoHub'];
+      let totalRemoved = 0;
+
+      for (const stage of stages) {
+        const scheduleRef = doc(db, `apps/${appId}/schedule/${stage}`);
+        const scheduleDoc = await getDoc(scheduleRef);
+
+        if (!scheduleDoc.exists()) {
+          log(`⚠️  ${stage}: No schedule found`);
+          continue;
+        }
+
+        const timeSlots = scheduleDoc.data().timeSlots || [];
+        let modified = false;
+
+        const newTimeSlots = timeSlots.map(slot => {
+          // Check if DJ is main DJ
+          if (slot.djName === djName) {
+            log(`✅ ${stage} - ${slot.time}: Removed ${djName} (main DJ)`);
+            modified = true;
+            totalRemoved++;
+            return { time: slot.time, djId: null, djName: null, guests: [] };
+          }
+
+          // Check if DJ is in guests array
+          if (slot.guests && Array.isArray(slot.guests)) {
+            const beforeCount = slot.guests.length;
+            const filteredGuests = slot.guests.filter(g => g.djName !== djName);
+            if (filteredGuests.length < beforeCount) {
+              log(`✅ ${stage} - ${slot.time}: Removed ${djName} (guest)`);
+              modified = true;
+              totalRemoved++;
+              return { ...slot, guests: filteredGuests };
+            }
+          }
+
+          return slot;
+        });
+
+        if (modified) {
+          await updateDoc(scheduleRef, { timeSlots: newTimeSlots });
+          log(`💾 ${stage}: Updated Firestore`);
+        } else {
+          log(`ℹ️  ${stage}: No changes needed`);
+        }
+      }
+
+      log(`\n✨ Complete! Removed ${totalRemoved} instance(s) of ${djName}`);
+    };
+
+    window.cleanAllGuests = async function() {
+      if (!confirm('Remove ALL guest DJs from ALL stages? This keeps main DJs but removes overlaps.')) {
+        return;
+      }
+
+      log('\n🧹 Cleaning all guests arrays...');
+      
+      const stages = ['mainStage', 'dubPub', 'technoHub'];
+
+      for (const stage of stages) {
+        const scheduleRef = doc(db, `apps/${appId}/schedule/${stage}`);
+        const scheduleDoc = await getDoc(scheduleRef);
+
+        if (!scheduleDoc.exists()) {
+          log(`⚠️  ${stage}: No schedule found`);
+          continue;
+        }
+
+        const timeSlots = scheduleDoc.data().timeSlots || [];
+        const newTimeSlots = timeSlots.map(slot => ({ ...slot, guests: [] }));
+
+        await updateDoc(scheduleRef, { timeSlots: newTimeSlots });
+        log(`✅ ${stage}: Cleared all guests`);
+      }
+
+      log('\n✨ Complete! All guests arrays cleared');
+    };
+
+    window.resetStage = async function() {
+      const stage = document.getElementById('stageSelect').value;
+      if (!confirm(`Reset ${stage}? This will clear ALL DJs and guests from this stage.`)) {
+        return;
+      }
+
+      log(`\n🔄 Resetting ${stage}...`);
+
+      const scheduleRef = doc(db, `apps/${appId}/schedule/${stage}`);
+      const scheduleDoc = await getDoc(scheduleRef);
+
+      if (!scheduleDoc.exists()) {
+        log(`⚠️  ${stage}: No schedule found`);
+        return;
+      }
+
+      const timeSlots = scheduleDoc.data().timeSlots || [];
+      const newTimeSlots = timeSlots.map(slot => ({
+        time: slot.time,
+        djId: null,
+        djName: null,
+        guests: []
+      }));
+
+      await updateDoc(scheduleRef, { timeSlots: newTimeSlots });
+      log(`✅ ${stage}: Reset complete`);
+      log(`\n✨ All slots cleared!`);
+    };
+
+    log('🚀 Firestore Cleanup Utility Ready');
+    log('Select an operation above to clean your data\n');
+  </script>
+</body>
+</html>

@@ -67,6 +67,8 @@ interface DJ {
   confirmedAt?: string; // ISO timestamp
   uid?: string; // Firebase auth UID when confirmed
   email?: string;
+  phone?: string;
+  socialMedia?: string;
   createdBy?: string;
 }
 
@@ -140,9 +142,17 @@ export default function App() {
   const [currentStage, setCurrentStage] = useState<StageType>('mainStage');
   const [viewMode, setViewMode] = useState<'single' | 'multi'>('single');
   
-  // Block selection for merging
-  const [selectionMode, setSelectionMode] = useState(false);
-  const [selectedSlots, setSelectedSlots] = useState<number[]>([]);
+  // Block selection for merging (per-stage)
+  const [selectionMode, setSelectionMode] = useState<Record<StageType, boolean>>({
+    mainStage: false,
+    dubPub: false,
+    technoHub: false
+  });
+  const [selectedSlots, setSelectedSlots] = useState<Record<StageType, number[]>>({
+    mainStage: [],
+    dubPub: [],
+    technoHub: []
+  });
 
   // --- Firebase Initialization and Auth ---
   useEffect(() => {
@@ -372,13 +382,16 @@ export default function App() {
         for (let i = start; i <= end; i++) {
           const target = { ...newTimeSlots[i] };
           if (assignAsGuest) {
+            // Only add as guest if slot has a DIFFERENT main DJ
             if (target.djId && target.djId !== djId) {
               const guests = Array.isArray(target.guests) ? [...target.guests] : [];
               if (!guests.find(g => g.djId === djId)) guests.push({ djId, djName });
               newTimeSlots[i] = { ...target, guests };
-            } else {
+            } else if (!target.djId) {
+              // If slot is empty, assign as main DJ instead of guest
               newTimeSlots[i] = { ...target, djId, djName };
             }
+            // If target.djId === djId, do nothing (already assigned)
           } else {
             newTimeSlots[i] = { ...target, djId, djName };
           }
@@ -404,12 +417,12 @@ export default function App() {
           // DJ is not scheduled yet
           const target = { ...newTimeSlots[targetSlotIndex] };
           if (target.djId && target.djId !== djId) {
-            // Slot already has a main DJ — add as guest to allow overlap
+            // Slot already has a DIFFERENT main DJ — add as guest to allow overlap
             const guests = Array.isArray(target.guests) ? [...target.guests] : [];
             if (!guests.find(g => g.djId === djId)) guests.push({ djId, djName });
             newTimeSlots[targetSlotIndex] = { ...target, guests };
           } else {
-            // Empty slot (or same DJ)
+            // Empty slot or same DJ - assign as main
             newTimeSlots[targetSlotIndex] = { ...target, djId, djName };
           }
         }
@@ -431,22 +444,36 @@ export default function App() {
           // Overlap into target (copy), keep source as-is
           const sourceSlot = { ...newTimeSlots[sourceSlotIndex] };
           const targetSlot = { ...newTimeSlots[targetSlotIndex] };
-          if (targetSlot.djId && targetSlot.djId !== sourceSlot.djId) {
+          
+          // Only add as guest if source has a DJ and target has a different main DJ
+          if (sourceSlot.djId && targetSlot.djId && targetSlot.djId !== sourceSlot.djId) {
             const guests = Array.isArray(targetSlot.guests) ? [...targetSlot.guests] : [];
-            if (sourceSlot.djId && !guests.find(g => g.djId === sourceSlot.djId)) {
+            // Prevent duplicates: don't add if already a guest OR if same as target main DJ
+            if (!guests.find(g => g.djId === sourceSlot.djId)) {
               guests.push({ djId: sourceSlot.djId, djName: sourceSlot.djName || '' });
               newTimeSlots[targetSlotIndex] = { ...targetSlot, guests };
             }
-          } else {
-            // If empty or same, just assign
+          } else if (!targetSlot.djId && sourceSlot.djId) {
+            // If target is empty, assign as main DJ
             newTimeSlots[targetSlotIndex] = { ...targetSlot, djId: sourceSlot.djId, djName: sourceSlot.djName };
           }
         } else {
+          // Swap main DJs AND their guests arrays
           const sourceSlot = { ...newTimeSlots[sourceSlotIndex] };
           const targetSlot = { ...newTimeSlots[targetSlotIndex] };
-          // Swap 'em
-          newTimeSlots[targetSlotIndex] = { ...targetSlot, djId: sourceSlot.djId, djName: sourceSlot.djName };
-          newTimeSlots[sourceSlotIndex] = { ...sourceSlot, djId: targetSlot.djId, djName: targetSlot.djName };
+          
+          newTimeSlots[targetSlotIndex] = { 
+            ...targetSlot, 
+            djId: sourceSlot.djId, 
+            djName: sourceSlot.djName,
+            guests: sourceSlot.guests || []
+          };
+          newTimeSlots[sourceSlotIndex] = { 
+            ...sourceSlot, 
+            djId: targetSlot.djId, 
+            djName: targetSlot.djName,
+            guests: targetSlot.guests || []
+          };
         }
       }
       
@@ -476,16 +503,69 @@ export default function App() {
       if (sourceData.from === 'slot') {
          // --- Dragging from SLOT to UNASSIGN ---
          const sourceSlotIndex = sourceData.slotIndex as number;
-         const newTimeSlots = [...(schedule as Schedule).timeSlots];
+         const sourceStage = sourceData.stage || currentStage; // Use stage from drag data or fallback to currentStage
          
-         // Clear the slot
-         newTimeSlots[sourceSlotIndex] = { ...newTimeSlots[sourceSlotIndex], djId: null, djName: null };
+         // Get the correct schedule
+         const targetSchedule = sourceStage === 'mainStage' ? schedule : 
+                               sourceStage === 'dubPub' ? dubPubSchedule : 
+                               technoHubSchedule;
          
-         // Update Firestore
-         const scheduleRef = doc(db!, `${sharedMode ? `apps/${appId}` : `users/${userId}/apps/${appId}`}/schedule/mainStage`);
+         if (!targetSchedule) return;
+         
+         const newTimeSlots = [...targetSchedule.timeSlots];
+         const slotToClear = newTimeSlots[sourceSlotIndex];
+         
+         // Clear the slot completely (main DJ, guests, and merge properties)
+         newTimeSlots[sourceSlotIndex] = { 
+           time: slotToClear.time,
+           djId: null, 
+           djName: null,
+           guests: []
+         };
+         
+         // Update Firestore with correct stage path
+         const scheduleRef = doc(db!, `${sharedMode ? `apps/${appId}` : `users/${userId}/apps/${appId}`}/schedule/${sourceStage}`);
          await updateDoc(scheduleRef, { timeSlots: newTimeSlots });
+      } else if (sourceData.from === 'pool') {
+         // --- Dragging DJ from POOL to UNASSIGN = Remove from ALL slots ---
+         const draggedDjId = sourceData.djId;
+         
+         // Get all three schedules
+         const allSchedules = [
+           { schedule, stage: 'mainStage' as StageType },
+           { schedule: dubPubSchedule, stage: 'dubPub' as StageType },
+           { schedule: technoHubSchedule, stage: 'technoHub' as StageType }
+         ];
+         
+         // Remove this DJ from ALL slots across ALL stages (both as main DJ and as guest)
+         for (const { schedule: sched, stage } of allSchedules) {
+           if (!sched) continue;
+           
+           let modified = false;
+           const newTimeSlots = sched.timeSlots.map(slot => {
+             // If this is the main DJ, clear the slot
+             if (slot.djId === draggedDjId) {
+               modified = true;
+               return { time: slot.time, djId: null, djName: null, guests: [] };
+             }
+             // If this DJ is in the guests array, remove them
+             if (slot.guests && slot.guests.some(g => g.djId === draggedDjId)) {
+               modified = true;
+               return { 
+                 ...slot, 
+                 guests: slot.guests.filter(g => g.djId !== draggedDjId) 
+               };
+             }
+             return slot;
+           });
+           
+           // Only update if we actually modified something
+           if (modified) {
+             const scheduleRef = doc(db!, `${sharedMode ? `apps/${appId}` : `users/${userId}/apps/${appId}`}/schedule/${stage}`);
+             await updateDoc(scheduleRef, { timeSlots: newTimeSlots });
+           }
+         }
       }
-      // If dragging from pool, do nothing
       
     } catch (err) {
       console.error('Error unassigning DJ:', err);
@@ -495,15 +575,69 @@ export default function App() {
     }
   };
 
-  const handleResetSchedule = async () => {
+  const handleRemoveDjFromAll = async (djId: string) => {
+    setIsLoading(true);
+    try {
+      // Get all three schedules
+      const allSchedules = [
+        { schedule, stage: 'mainStage' as StageType },
+        { schedule: dubPubSchedule, stage: 'dubPub' as StageType },
+        { schedule: technoHubSchedule, stage: 'technoHub' as StageType }
+      ];
+      
+      // Remove this DJ from ALL slots across ALL stages (both as main DJ and as guest)
+      for (const { schedule: sched, stage } of allSchedules) {
+        if (!sched) continue;
+        
+        let modified = false;
+        const newTimeSlots = sched.timeSlots.map(slot => {
+          // If this is the main DJ, clear the slot
+          if (slot.djId === djId) {
+            modified = true;
+            return { time: slot.time, djId: null, djName: null, guests: [] };
+          }
+          // If this DJ is in the guests array, remove them
+          if (slot.guests && slot.guests.some(g => g.djId === djId)) {
+            modified = true;
+            return { 
+              ...slot, 
+              guests: slot.guests.filter(g => g.djId !== djId) 
+            };
+          }
+          return slot;
+        });
+        
+        // Only update if we actually modified something
+        if (modified) {
+          const scheduleRef = doc(db!, `${sharedMode ? `apps/${appId}` : `users/${userId}/apps/${appId}`}/schedule/${stage}`);
+          await updateDoc(scheduleRef, { timeSlots: newTimeSlots });
+        }
+      }
+    } catch (err) {
+      console.error('Error removing DJ from all schedules:', err);
+      setError('Failed to remove DJ.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleResetSchedule = async (stageToReset?: StageType) => {
     if (!window.confirm('Clear all slot assignments and return all DJs to the unassigned pool?')) return;
     setIsLoading(true);
     try {
-      const scheduleRef = doc(db!, `${sharedMode ? `apps/${appId}` : `users/${userId}/apps/${appId}`}/schedule/mainStage`);
-      const newTimeSlots = (schedule as Schedule).timeSlots.map(slot => ({
+      const stagePath = stageToReset || currentStage;
+      const targetSchedule = stagePath === 'mainStage' ? schedule : 
+                            stagePath === 'dubPub' ? dubPubSchedule : 
+                            technoHubSchedule;
+      
+      if (!targetSchedule) return;
+      
+      const scheduleRef = doc(db!, `${sharedMode ? `apps/${appId}` : `users/${userId}/apps/${appId}`}/schedule/${stagePath}`);
+      const newTimeSlots = targetSchedule.timeSlots.map(slot => ({
         time: slot.time,
         djId: null,
-        djName: null
+        djName: null,
+        guests: []
       }));
       await updateDoc(scheduleRef, { timeSlots: newTimeSlots });
     } catch (err) {
@@ -521,62 +655,82 @@ export default function App() {
   };
 
   // --- Block Selection and Merging ---
-  const handleToggleSelectionMode = () => {
-    setSelectionMode(!selectionMode);
-    setSelectedSlots([]);
+  const handleToggleSelectionMode = (stage: StageType) => {
+    setSelectionMode(prev => ({ ...prev, [stage]: !prev[stage] }));
+    setSelectedSlots(prev => ({ ...prev, [stage]: [] }));
   };
 
-  const handleSlotSelection = (index: number) => {
-    if (!selectionMode) return;
+  const handleSlotSelection = (index: number, stage: StageType) => {
+    if (!selectionMode[stage]) return;
     
-    if (selectedSlots.includes(index)) {
-      setSelectedSlots(selectedSlots.filter(i => i !== index));
+    const stageSlots = selectedSlots[stage];
+    if (stageSlots.includes(index)) {
+      setSelectedSlots(prev => ({ ...prev, [stage]: stageSlots.filter(i => i !== index) }));
     } else {
-      setSelectedSlots([...selectedSlots, index].sort((a, b) => a - b));
+      setSelectedSlots(prev => ({ ...prev, [stage]: [...stageSlots, index].sort((a, b) => a - b) }));
     }
   };
 
-  const handleMergeSlots = async () => {
-    if (selectedSlots.length < 2) {
+  const handleMergeSlots = async (stage: StageType) => {
+    const stageSlots = selectedSlots[stage];
+    if (stageSlots.length < 2) {
       alert('Please select at least 2 adjacent slots to merge.');
       return;
     }
 
     // Check if slots are adjacent
-    for (let i = 0; i < selectedSlots.length - 1; i++) {
-      if (selectedSlots[i + 1] !== selectedSlots[i] + 1) {
+    for (let i = 0; i < stageSlots.length - 1; i++) {
+      if (stageSlots[i + 1] !== stageSlots[i] + 1) {
         alert('Please select adjacent slots only.');
         return;
       }
     }
 
-    const currentSchedule = getCurrentSchedule();
-    if (!currentSchedule) return;
+    const targetSchedule = stage === 'mainStage' ? schedule : 
+                          stage === 'dubPub' ? dubPubSchedule : 
+                          technoHubSchedule;
+    if (!targetSchedule) return;
 
     setIsLoading(true);
     try {
-      const newTimeSlots = [...currentSchedule.timeSlots];
-      const startIndex = selectedSlots[0];
+      const newTimeSlots = [...targetSchedule.timeSlots];
+      const startIndex = stageSlots[0];
       
-      // Mark the first slot as merged start
+      // Consolidate all guests from the merged slots into the first slot
+      const allGuests: Array<{ djId: string; djName: string }> = [];
+      for (const slotIdx of stageSlots) {
+        const slot = newTimeSlots[slotIdx];
+        if (slot.guests && Array.isArray(slot.guests)) {
+          for (const guest of slot.guests) {
+            if (!allGuests.find(g => g.djId === guest.djId)) {
+              allGuests.push(guest);
+            }
+          }
+        }
+      }
+      
+      // Mark the first slot as merged start with consolidated guests
       newTimeSlots[startIndex] = {
         ...newTimeSlots[startIndex],
         isMergedStart: true,
-        mergedCount: selectedSlots.length
+        mergedCount: stageSlots.length,
+        guests: allGuests
       };
 
-      // Mark continuation slots
-      for (let i = 1; i < selectedSlots.length; i++) {
-        const slotIndex = selectedSlots[i];
+      // Mark continuation slots and clear their guests
+      for (let i = 1; i < stageSlots.length; i++) {
+        const slotIndex = stageSlots[i];
         newTimeSlots[slotIndex] = {
           ...newTimeSlots[slotIndex],
-          mergedWith: startIndex
+          mergedWith: startIndex,
+          guests: [] // Clear guests from continuation slots
         };
       }
 
-      await updateSchedule(newTimeSlots);
-      setSelectedSlots([]);
-      setSelectionMode(false);
+      const scheduleRef = doc(db!, `${sharedMode ? `apps/${appId}` : `users/${userId}/apps/${appId}`}/schedule/${stage}`);
+      await updateDoc(scheduleRef, { timeSlots: newTimeSlots });
+      setSelectedSlots(prev => ({ ...prev, [stage]: [] }));
+      setSelectionMode(prev => ({ ...prev, [stage]: false }));
     } catch (err) {
       console.error('Error merging slots:', err);
       setError('Failed to merge slots.');
@@ -585,38 +739,49 @@ export default function App() {
     }
   };
 
-  const handleUnmergeSlot = async (index: number) => {
-    const currentSchedule = getCurrentSchedule();
-    if (!currentSchedule) return;
+  const handleUnmergeSlot = async (index: number, stage: StageType) => {
+    const targetSchedule = stage === 'mainStage' ? schedule : 
+                          stage === 'dubPub' ? dubPubSchedule : 
+                          technoHubSchedule;
+    if (!targetSchedule) return;
 
     setIsLoading(true);
     try {
-      const newTimeSlots = [...currentSchedule.timeSlots];
+      const newTimeSlots = [...targetSchedule.timeSlots];
       const slot = newTimeSlots[index];
 
       if (slot.isMergedStart && slot.mergedCount) {
-        // Unmerge all slots in this block
+        // Unmerge all slots in this block, preserve guests on first slot only
+        const guestsToKeep = slot.guests || [];
         delete newTimeSlots[index].isMergedStart;
         delete newTimeSlots[index].mergedCount;
 
         for (let i = index + 1; i < index + slot.mergedCount; i++) {
           delete newTimeSlots[i].mergedWith;
+          // Continuation slots should have empty guests after unmerge
+          newTimeSlots[i] = { ...newTimeSlots[i], guests: [] };
         }
+        // Keep guests on the start slot
+        newTimeSlots[index] = { ...newTimeSlots[index], guests: guestsToKeep };
       } else if (slot.mergedWith !== undefined) {
         // This is a continuation slot, unmerge the entire block
         const startIndex = slot.mergedWith;
         const startSlot = newTimeSlots[startIndex];
         if (startSlot.mergedCount) {
+          const guestsToKeep = startSlot.guests || [];
           delete newTimeSlots[startIndex].isMergedStart;
           delete newTimeSlots[startIndex].mergedCount;
 
           for (let i = startIndex + 1; i < startIndex + startSlot.mergedCount; i++) {
             delete newTimeSlots[i].mergedWith;
+            newTimeSlots[i] = { ...newTimeSlots[i], guests: [] };
           }
+          newTimeSlots[startIndex] = { ...newTimeSlots[startIndex], guests: guestsToKeep };
         }
       }
 
-      await updateSchedule(newTimeSlots);
+      const scheduleRef = doc(db!, `${sharedMode ? `apps/${appId}` : `users/${userId}/apps/${appId}`}/schedule/${stage}`);
+      await updateDoc(scheduleRef, { timeSlots: newTimeSlots });
     } catch (err) {
       console.error('Error unmerging slot:', err);
       setError('Failed to unmerge slot.');
@@ -859,6 +1024,7 @@ export default function App() {
             isDropZoneActive={dragCounter > 0}
             disabled={isLoading}
             allSchedules={[schedule, dubPubSchedule, technoHubSchedule]}
+            onRemoveDj={handleRemoveDjFromAll}
           />
         </aside>
 
@@ -943,13 +1109,13 @@ export default function App() {
                   isDropZoneActive={dragCounter > 0}
                   disabled={isLoading}
                   activeRange={rangeStart !== null ? { start: Math.min(rangeStart, rangeEnd ?? rangeStart), end: Math.max(rangeStart, rangeEnd ?? rangeStart) } : null}
-                  onReset={handleResetSchedule}
-                  selectionMode={selectionMode}
-                  selectedSlots={selectedSlots}
-                  onSlotClick={handleSlotSelection}
-                  onToggleSelectionMode={handleToggleSelectionMode}
-                  onMergeSlots={handleMergeSlots}
-                  onUnmerge={handleUnmergeSlot}
+                  onReset={() => handleResetSchedule('mainStage')}
+                  selectionMode={selectionMode['mainStage']}
+                  selectedSlots={selectedSlots['mainStage']}
+                  onSlotClick={(index) => handleSlotSelection(index, 'mainStage')}
+                  onToggleSelectionMode={() => handleToggleSelectionMode('mainStage')}
+                  onMergeSlots={() => handleMergeSlots('mainStage')}
+                  onUnmerge={(index) => handleUnmergeSlot(index, 'mainStage')}
                   onNameUpdate={(name) => updateScheduleName('mainStage', name)}
                   stage="mainStage"
                   onClearGuests={handleClearGuests}
@@ -969,13 +1135,13 @@ export default function App() {
                   isDropZoneActive={dragCounter > 0}
                   disabled={isLoading}
                   activeRange={rangeStart !== null ? { start: Math.min(rangeStart, rangeEnd ?? rangeStart), end: Math.max(rangeStart, rangeEnd ?? rangeStart) } : null}
-                  onReset={handleResetSchedule}
-                  selectionMode={selectionMode}
-                  selectedSlots={selectedSlots}
-                  onSlotClick={handleSlotSelection}
-                  onToggleSelectionMode={handleToggleSelectionMode}
-                  onMergeSlots={handleMergeSlots}
-                  onUnmerge={handleUnmergeSlot}
+                  onReset={() => handleResetSchedule('dubPub')}
+                  selectionMode={selectionMode['dubPub']}
+                  selectedSlots={selectedSlots['dubPub']}
+                  onSlotClick={(index) => handleSlotSelection(index, 'dubPub')}
+                  onToggleSelectionMode={() => handleToggleSelectionMode('dubPub')}
+                  onMergeSlots={() => handleMergeSlots('dubPub')}
+                  onUnmerge={(index) => handleUnmergeSlot(index, 'dubPub')}
                   onNameUpdate={(name) => updateScheduleName('dubPub', name)}
                   stage="dubPub"
                   onClearGuests={handleClearGuests}
@@ -995,13 +1161,13 @@ export default function App() {
                   isDropZoneActive={dragCounter > 0}
                   disabled={isLoading}
                   activeRange={rangeStart !== null ? { start: Math.min(rangeStart, rangeEnd ?? rangeStart), end: Math.max(rangeStart, rangeEnd ?? rangeStart) } : null}
-                  onReset={handleResetSchedule}
-                  selectionMode={selectionMode}
-                  selectedSlots={selectedSlots}
-                  onSlotClick={handleSlotSelection}
-                  onToggleSelectionMode={handleToggleSelectionMode}
-                  onMergeSlots={handleMergeSlots}
-                  onUnmerge={handleUnmergeSlot}
+                  onReset={() => handleResetSchedule('technoHub')}
+                  selectionMode={selectionMode['technoHub']}
+                  selectedSlots={selectedSlots['technoHub']}
+                  onSlotClick={(index) => handleSlotSelection(index, 'technoHub')}
+                  onToggleSelectionMode={() => handleToggleSelectionMode('technoHub')}
+                  onMergeSlots={() => handleMergeSlots('technoHub')}
+                  onUnmerge={(index) => handleUnmergeSlot(index, 'technoHub')}
                   onNameUpdate={(name) => updateScheduleName('technoHub', name)}
                   stage="technoHub"
                   onClearGuests={handleClearGuests}
@@ -1022,13 +1188,13 @@ export default function App() {
               isDropZoneActive={dragCounter > 0}
               disabled={isLoading}
               activeRange={rangeStart !== null ? { start: Math.min(rangeStart, rangeEnd ?? rangeStart), end: Math.max(rangeStart, rangeEnd ?? rangeStart) } : null}
-              onReset={handleResetSchedule}
-              selectionMode={selectionMode}
-              selectedSlots={selectedSlots}
-              onSlotClick={handleSlotSelection}
-              onToggleSelectionMode={handleToggleSelectionMode}
-              onMergeSlots={handleMergeSlots}
-              onUnmerge={handleUnmergeSlot}
+              onReset={() => handleResetSchedule(currentStage)}
+              selectionMode={selectionMode[currentStage]}
+              selectedSlots={selectedSlots[currentStage]}
+              onSlotClick={(index) => handleSlotSelection(index, currentStage)}
+              onToggleSelectionMode={() => handleToggleSelectionMode(currentStage)}
+              onMergeSlots={() => handleMergeSlots(currentStage)}
+              onUnmerge={(index) => handleUnmergeSlot(index, currentStage)}
               onNameUpdate={(name) => updateScheduleName(currentStage, name)}
               stage={currentStage}
               onClearGuests={handleClearGuests}
@@ -1228,6 +1394,9 @@ function DJRegistrationForm({ db, userId, appId, setIsLoading, setError, disable
     info: '',
     photoUrl: '',
     visualUrl: '',
+    email: '',
+    phone: '',
+    socialMedia: '',
   });
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
@@ -1265,6 +1434,9 @@ function DJRegistrationForm({ db, userId, appId, setIsLoading, setError, disable
         info: '',
         photoUrl: '',
         visualUrl: '',
+        email: '',
+        phone: '',
+        socialMedia: '',
       });
     } catch (err) {
       console.error('Error registering DJ:', err);
@@ -1337,6 +1509,42 @@ function DJRegistrationForm({ db, userId, appId, setIsLoading, setError, disable
             value={formData.visualUrl}
             onChange={handleChange}
             placeholder="https://youtube.com/watch?v=..."
+            className="w-full mt-1 p-2 bg-gray-700 border border-gray-600 rounded-md text-white focus:ring-blue-500 focus:border-blue-500"
+          />
+        </div>
+        <div>
+          <label htmlFor="email" className="block text-sm font-medium text-gray-300">Email Address</label>
+          <input
+            type="email"
+            id="email"
+            name="email"
+            value={formData.email}
+            onChange={handleChange}
+            placeholder="dj@example.com"
+            className="w-full mt-1 p-2 bg-gray-700 border border-gray-600 rounded-md text-white focus:ring-blue-500 focus:border-blue-500"
+          />
+        </div>
+        <div>
+          <label htmlFor="phone" className="block text-sm font-medium text-gray-300">Phone Number</label>
+          <input
+            type="tel"
+            id="phone"
+            name="phone"
+            value={formData.phone}
+            onChange={handleChange}
+            placeholder="+1 234 567 8900"
+            className="w-full mt-1 p-2 bg-gray-700 border border-gray-600 rounded-md text-white focus:ring-blue-500 focus:border-blue-500"
+          />
+        </div>
+        <div>
+          <label htmlFor="socialMedia" className="block text-sm font-medium text-gray-300">Social Media / Links</label>
+          <input
+            type="text"
+            id="socialMedia"
+            name="socialMedia"
+            value={formData.socialMedia}
+            onChange={handleChange}
+            placeholder="@djhandle or https://soundcloud.com/..."
             className="w-full mt-1 p-2 bg-gray-700 border border-gray-600 rounded-md text-white focus:ring-blue-500 focus:border-blue-500"
           />
         </div>
@@ -1590,7 +1798,7 @@ function AdminSettings({ db, userId, appId }: { db: ReturnType<typeof getFiresto
 /**
  * Unassigned DJ Pool
  */
-function DJPool({ djs, onDjClick, onDragStart, onDragOver, onDragEnter, onDragLeave, onDrop, isDropZoneActive, disabled, allSchedules }: {
+function DJPool({ djs, onDjClick, onDragStart, onDragOver, onDragEnter, onDragLeave, onDrop, isDropZoneActive, disabled, allSchedules, onRemoveDj }: {
   djs: DJ[];
   onDjClick: (dj: DJ) => void;
   onDragStart: (e: React.DragEvent, data: unknown) => void;
@@ -1601,6 +1809,7 @@ function DJPool({ djs, onDjClick, onDragStart, onDragOver, onDragEnter, onDragLe
   isDropZoneActive: boolean;
   disabled: boolean;
   allSchedules: (Schedule | null)[];
+  onRemoveDj: (djId: string) => void;
 }) {
   // Helper: get assigned slots for a DJ across all stages
   const getDjSlots = (djId: string) => {
@@ -1636,6 +1845,7 @@ function DJPool({ djs, onDjClick, onDragStart, onDragOver, onDragEnter, onDragLe
                   onDragStart={(e) => onDragStart(e, { from: 'pool', dj })}
                   showInvite={djSlots.length > 0}
                   assignedSlots={djSlots}
+                  onRemove={() => onRemoveDj(dj.id!)}
                 />
               </div>
             );
@@ -1920,14 +2130,14 @@ function TimeSlot({ slot, slotIndex, allDjs, onDjClick, onDragStart, onDragOver,
                 {/* Left resize handle */}
                 <div
                   draggable={!disabled}
-                  onDragStart={(e) => onDragStart(e, { from: 'resize', direction: 'left', slotIndex, djId: dj.id, djName: dj.djName })}
+                  onDragStart={(e) => onDragStart(e, { from: 'resize', direction: 'left', slotIndex, djId: dj.id, djName: dj.djName, stage })}
                   title="Extend earlier"
                   className="absolute left-0 top-1/2 -translate-y-1/2 w-2 h-8 bg-blue-500/60 hover:bg-blue-500 rounded-sm cursor-ew-resize z-10"
                 />
                 {/* Right resize handle */}
                 <div
                   draggable={!disabled}
-                  onDragStart={(e) => onDragStart(e, { from: 'resize', direction: 'right', slotIndex, djId: dj.id, djName: dj.djName })}
+                  onDragStart={(e) => onDragStart(e, { from: 'resize', direction: 'right', slotIndex, djId: dj.id, djName: dj.djName, stage })}
                   title="Extend later"
                   className="absolute right-0 top-1/2 -translate-y-1/2 w-2 h-8 bg-blue-500/60 hover:bg-blue-500 rounded-sm cursor-ew-resize z-10"
                 />
@@ -1937,7 +2147,7 @@ function TimeSlot({ slot, slotIndex, allDjs, onDjClick, onDragStart, onDragOver,
               dj={dj}
               onClick={() => onDjClick(dj)}
               isDraggable={!disabled && !selectionMode}
-              onDragStart={(e) => onDragStart(e, { from: 'slot', slotIndex, djId: dj.id, djName: dj.djName })}
+              onDragStart={(e) => onDragStart(e, { from: 'slot', slotIndex, djId: dj.id, djName: dj.djName, stage })}
             />
           </div>
         ) : (
@@ -1988,20 +2198,22 @@ function TimeSlot({ slot, slotIndex, allDjs, onDjClick, onDragStart, onDragOver,
 /**
  * Draggable/Clickable DJ Item
  */
-function DJItem({ dj, onClick, isDraggable, onDragStart, showInvite, assignedSlots }: {
+function DJItem({ dj, onClick, isDraggable, onDragStart, showInvite, assignedSlots, onRemove }: {
   dj: DJ;
   onClick: () => void;
   isDraggable: boolean;
   onDragStart: (e: React.DragEvent) => void;
   showInvite?: boolean;
   assignedSlots?: TimeSlot[];
+  onRemove?: () => void;
 }) {
   const [copied, setCopied] = useState(false);
   const placeholder = `https://placehold.co/40x40/374151/9CA3AF?text=${encodeURIComponent(dj.djName?.charAt(0) || 'D')}`;
   
   const handleInvite = (e: React.MouseEvent) => {
     e.stopPropagation();
-    let inviteUrl = `${window.location.origin}/Registration.html?djName=${encodeURIComponent(dj.djName)}&realName=${encodeURIComponent(dj.realName)}`;
+    const baseUrl = window.location.origin + window.location.pathname.replace(/\/[^\/]*$/, '');
+    let inviteUrl = `${baseUrl}/Registration.html?djId=${dj.id}&djName=${encodeURIComponent(dj.djName)}`;
     
     // Add assigned time slots to the URL
     if (assignedSlots && assignedSlots.length > 0) {
@@ -2014,13 +2226,23 @@ function DJItem({ dj, onClick, isDraggable, onDragStart, showInvite, assignedSlo
       setTimeout(() => setCopied(false), 2000);
     }).catch(err => {
       console.error('Failed to copy invite link:', err);
+      // Fallback: show prompt
+      prompt('Copy this invite link:', inviteUrl);
     });
+  };
+
+  const handleContextMenu = (e: React.MouseEvent) => {
+    e.preventDefault();
+    if (onRemove && window.confirm(`Remove ${dj.djName} from all schedules?`)) {
+      onRemove();
+    }
   };
 
   return (
     <div
       draggable={isDraggable}
       onDragStart={onDragStart}
+      onContextMenu={handleContextMenu}
       className={`flex items-center bg-gray-900 p-2 rounded-md shadow-sm ${
         isDraggable ? 'cursor-move' : 'cursor-pointer'
       } border border-gray-700 hover:bg-gray-800 transition-colors`}
@@ -2073,6 +2295,26 @@ function DJItem({ dj, onClick, isDraggable, onDragStart, showInvite, assignedSlo
  */
 function DJModal({ dj, onClose }: { dj: DJ; onClose: () => void }) {
   const bigPlaceholder = 'https://placehold.co/600x400/374151/9CA3AF?text=No+Photo';
+  const [copySuccess, setCopySuccess] = useState(false);
+  
+  const generateInviteLink = () => {
+    const baseUrl = window.location.origin + window.location.pathname.replace(/\/[^\/]*$/, '');
+    return `${baseUrl}/Registration.html?djId=${dj.id}&djName=${encodeURIComponent(dj.djName)}`;
+  };
+  
+  const handleCopyInvite = async () => {
+    const inviteLink = generateInviteLink();
+    try {
+      await navigator.clipboard.writeText(inviteLink);
+      setCopySuccess(true);
+      setTimeout(() => setCopySuccess(false), 2000);
+    } catch (err) {
+      console.error('Failed to copy:', err);
+      // Fallback: show prompt
+      prompt('Copy this invite link:', inviteLink);
+    }
+  };
+  
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black bg-opacity-75 backdrop-blur-sm"
@@ -2113,6 +2355,31 @@ function DJModal({ dj, onClose }: { dj: DJ; onClose: () => void }) {
              <p className="text-lg text-white">{dj.realName}</p>
           </div>
           
+          {/* Contact Information */}
+          {(dj.email || dj.phone || dj.socialMedia) && (
+            <div className="bg-gray-700 p-4 rounded-lg space-y-2">
+              <h3 className="text-sm font-semibold text-gray-400 mb-3">Contact Info</h3>
+              {dj.email && (
+                <div>
+                  <span className="text-xs text-gray-400">Email:</span>
+                  <p className="text-white">{dj.email}</p>
+                </div>
+              )}
+              {dj.phone && (
+                <div>
+                  <span className="text-xs text-gray-400">Phone:</span>
+                  <p className="text-white">{dj.phone}</p>
+                </div>
+              )}
+              {dj.socialMedia && (
+                <div>
+                  <span className="text-xs text-gray-400">Social/Links:</span>
+                  <p className="text-white break-all">{dj.socialMedia}</p>
+                </div>
+              )}
+            </div>
+          )}
+          
           {dj.info && (
             <div className="bg-gray-700 p-4 rounded-lg">
               <h3 className="text-sm font-semibold text-gray-400 flex items-center">
@@ -2143,7 +2410,7 @@ function DJModal({ dj, onClose }: { dj: DJ; onClose: () => void }) {
           {/* Invitation Status */}
           <div className="bg-gray-700 p-4 rounded-lg">
             <h3 className="text-sm font-semibold text-gray-400 mb-2">Invitation Status</h3>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 mb-3">
               <span className={`text-sm px-3 py-1.5 rounded font-medium ${
                 dj.inviteStatus === 'confirmed' ? 'bg-green-700 text-green-100' :
                 dj.inviteStatus === 'pending' ? 'bg-yellow-700 text-yellow-100' :
@@ -2166,6 +2433,32 @@ function DJModal({ dj, onClose }: { dj: DJ; onClose: () => void }) {
                 </span>
               )}
             </div>
+            
+            {/* Invite Link */}
+            {dj.id && dj.inviteStatus !== 'confirmed' && (
+              <div className="mt-3 border-t border-gray-600 pt-3">
+                <p className="text-xs text-gray-400 mb-2">Share this invite link with {dj.djName}:</p>
+                <div className="flex gap-2">
+                  <input 
+                    type="text" 
+                    readOnly 
+                    value={generateInviteLink()}
+                    className="flex-1 px-3 py-2 bg-gray-800 border border-gray-600 rounded text-sm text-gray-300 truncate"
+                    onClick={(e) => (e.target as HTMLInputElement).select()}
+                  />
+                  <button
+                    onClick={handleCopyInvite}
+                    className={`px-4 py-2 rounded font-medium transition-colors ${
+                      copySuccess 
+                        ? 'bg-green-600 text-white' 
+                        : 'bg-blue-600 hover:bg-blue-700 text-white'
+                    }`}
+                  >
+                    {copySuccess ? '✓ Copied!' : '📋 Copy'}
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>
