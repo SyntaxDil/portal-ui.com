@@ -67,6 +67,8 @@ interface DJ {
   confirmedAt?: string; // ISO timestamp
   uid?: string; // Firebase auth UID when confirmed
   email?: string;
+  phone?: string;
+  socialMedia?: string;
   createdBy?: string;
 }
 
@@ -1228,6 +1230,9 @@ function DJRegistrationForm({ db, userId, appId, setIsLoading, setError, disable
     info: '',
     photoUrl: '',
     visualUrl: '',
+    email: '',
+    phone: '',
+    socialMedia: '',
   });
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
@@ -1265,6 +1270,9 @@ function DJRegistrationForm({ db, userId, appId, setIsLoading, setError, disable
         info: '',
         photoUrl: '',
         visualUrl: '',
+        email: '',
+        phone: '',
+        socialMedia: '',
       });
     } catch (err) {
       console.error('Error registering DJ:', err);
@@ -1337,6 +1345,42 @@ function DJRegistrationForm({ db, userId, appId, setIsLoading, setError, disable
             value={formData.visualUrl}
             onChange={handleChange}
             placeholder="https://youtube.com/watch?v=..."
+            className="w-full mt-1 p-2 bg-gray-700 border border-gray-600 rounded-md text-white focus:ring-blue-500 focus:border-blue-500"
+          />
+        </div>
+        <div>
+          <label htmlFor="email" className="block text-sm font-medium text-gray-300">Email Address</label>
+          <input
+            type="email"
+            id="email"
+            name="email"
+            value={formData.email}
+            onChange={handleChange}
+            placeholder="dj@example.com"
+            className="w-full mt-1 p-2 bg-gray-700 border border-gray-600 rounded-md text-white focus:ring-blue-500 focus:border-blue-500"
+          />
+        </div>
+        <div>
+          <label htmlFor="phone" className="block text-sm font-medium text-gray-300">Phone Number</label>
+          <input
+            type="tel"
+            id="phone"
+            name="phone"
+            value={formData.phone}
+            onChange={handleChange}
+            placeholder="+1 234 567 8900"
+            className="w-full mt-1 p-2 bg-gray-700 border border-gray-600 rounded-md text-white focus:ring-blue-500 focus:border-blue-500"
+          />
+        </div>
+        <div>
+          <label htmlFor="socialMedia" className="block text-sm font-medium text-gray-300">Social Media / Links</label>
+          <input
+            type="text"
+            id="socialMedia"
+            name="socialMedia"
+            value={formData.socialMedia}
+            onChange={handleChange}
+            placeholder="@djhandle or https://soundcloud.com/..."
             className="w-full mt-1 p-2 bg-gray-700 border border-gray-600 rounded-md text-white focus:ring-blue-500 focus:border-blue-500"
           />
         </div>
@@ -2001,7 +2045,8 @@ function DJItem({ dj, onClick, isDraggable, onDragStart, showInvite, assignedSlo
   
   const handleInvite = (e: React.MouseEvent) => {
     e.stopPropagation();
-    let inviteUrl = `${window.location.origin}/Registration.html?djName=${encodeURIComponent(dj.djName)}&realName=${encodeURIComponent(dj.realName)}`;
+    const baseUrl = window.location.origin + window.location.pathname.replace(/\/[^\/]*$/, '');
+    let inviteUrl = `${baseUrl}/Registration.html?djId=${dj.id}&djName=${encodeURIComponent(dj.djName)}`;
     
     // Add assigned time slots to the URL
     if (assignedSlots && assignedSlots.length > 0) {
@@ -2014,6 +2059,8 @@ function DJItem({ dj, onClick, isDraggable, onDragStart, showInvite, assignedSlo
       setTimeout(() => setCopied(false), 2000);
     }).catch(err => {
       console.error('Failed to copy invite link:', err);
+      // Fallback: show prompt
+      prompt('Copy this invite link:', inviteUrl);
     });
   };
 
@@ -2073,6 +2120,26 @@ function DJItem({ dj, onClick, isDraggable, onDragStart, showInvite, assignedSlo
  */
 function DJModal({ dj, onClose }: { dj: DJ; onClose: () => void }) {
   const bigPlaceholder = 'https://placehold.co/600x400/374151/9CA3AF?text=No+Photo';
+  const [copySuccess, setCopySuccess] = useState(false);
+  
+  const generateInviteLink = () => {
+    const baseUrl = window.location.origin + window.location.pathname.replace(/\/[^\/]*$/, '');
+    return `${baseUrl}/Registration.html?djId=${dj.id}&djName=${encodeURIComponent(dj.djName)}`;
+  };
+  
+  const handleCopyInvite = async () => {
+    const inviteLink = generateInviteLink();
+    try {
+      await navigator.clipboard.writeText(inviteLink);
+      setCopySuccess(true);
+      setTimeout(() => setCopySuccess(false), 2000);
+    } catch (err) {
+      console.error('Failed to copy:', err);
+      // Fallback: show prompt
+      prompt('Copy this invite link:', inviteLink);
+    }
+  };
+  
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black bg-opacity-75 backdrop-blur-sm"
@@ -2113,6 +2180,31 @@ function DJModal({ dj, onClose }: { dj: DJ; onClose: () => void }) {
              <p className="text-lg text-white">{dj.realName}</p>
           </div>
           
+          {/* Contact Information */}
+          {(dj.email || dj.phone || dj.socialMedia) && (
+            <div className="bg-gray-700 p-4 rounded-lg space-y-2">
+              <h3 className="text-sm font-semibold text-gray-400 mb-3">Contact Info</h3>
+              {dj.email && (
+                <div>
+                  <span className="text-xs text-gray-400">Email:</span>
+                  <p className="text-white">{dj.email}</p>
+                </div>
+              )}
+              {dj.phone && (
+                <div>
+                  <span className="text-xs text-gray-400">Phone:</span>
+                  <p className="text-white">{dj.phone}</p>
+                </div>
+              )}
+              {dj.socialMedia && (
+                <div>
+                  <span className="text-xs text-gray-400">Social/Links:</span>
+                  <p className="text-white break-all">{dj.socialMedia}</p>
+                </div>
+              )}
+            </div>
+          )}
+          
           {dj.info && (
             <div className="bg-gray-700 p-4 rounded-lg">
               <h3 className="text-sm font-semibold text-gray-400 flex items-center">
@@ -2143,7 +2235,7 @@ function DJModal({ dj, onClose }: { dj: DJ; onClose: () => void }) {
           {/* Invitation Status */}
           <div className="bg-gray-700 p-4 rounded-lg">
             <h3 className="text-sm font-semibold text-gray-400 mb-2">Invitation Status</h3>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 mb-3">
               <span className={`text-sm px-3 py-1.5 rounded font-medium ${
                 dj.inviteStatus === 'confirmed' ? 'bg-green-700 text-green-100' :
                 dj.inviteStatus === 'pending' ? 'bg-yellow-700 text-yellow-100' :
@@ -2166,6 +2258,32 @@ function DJModal({ dj, onClose }: { dj: DJ; onClose: () => void }) {
                 </span>
               )}
             </div>
+            
+            {/* Invite Link */}
+            {dj.id && dj.inviteStatus !== 'confirmed' && (
+              <div className="mt-3 border-t border-gray-600 pt-3">
+                <p className="text-xs text-gray-400 mb-2">Share this invite link with {dj.djName}:</p>
+                <div className="flex gap-2">
+                  <input 
+                    type="text" 
+                    readOnly 
+                    value={generateInviteLink()}
+                    className="flex-1 px-3 py-2 bg-gray-800 border border-gray-600 rounded text-sm text-gray-300 truncate"
+                    onClick={(e) => (e.target as HTMLInputElement).select()}
+                  />
+                  <button
+                    onClick={handleCopyInvite}
+                    className={`px-4 py-2 rounded font-medium transition-colors ${
+                      copySuccess 
+                        ? 'bg-green-600 text-white' 
+                        : 'bg-blue-600 hover:bg-blue-700 text-white'
+                    }`}
+                  >
+                    {copySuccess ? '✓ Copied!' : '📋 Copy'}
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>
