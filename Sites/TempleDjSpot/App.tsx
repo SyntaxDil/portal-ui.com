@@ -575,6 +575,52 @@ export default function App() {
     }
   };
 
+  const handleRemoveDjFromAll = async (djId: string) => {
+    setIsLoading(true);
+    try {
+      // Get all three schedules
+      const allSchedules = [
+        { schedule, stage: 'mainStage' as StageType },
+        { schedule: dubPubSchedule, stage: 'dubPub' as StageType },
+        { schedule: technoHubSchedule, stage: 'technoHub' as StageType }
+      ];
+      
+      // Remove this DJ from ALL slots across ALL stages (both as main DJ and as guest)
+      for (const { schedule: sched, stage } of allSchedules) {
+        if (!sched) continue;
+        
+        let modified = false;
+        const newTimeSlots = sched.timeSlots.map(slot => {
+          // If this is the main DJ, clear the slot
+          if (slot.djId === djId) {
+            modified = true;
+            return { time: slot.time, djId: null, djName: null, guests: [] };
+          }
+          // If this DJ is in the guests array, remove them
+          if (slot.guests && slot.guests.some(g => g.djId === djId)) {
+            modified = true;
+            return { 
+              ...slot, 
+              guests: slot.guests.filter(g => g.djId !== djId) 
+            };
+          }
+          return slot;
+        });
+        
+        // Only update if we actually modified something
+        if (modified) {
+          const scheduleRef = doc(db!, `${sharedMode ? `apps/${appId}` : `users/${userId}/apps/${appId}`}/schedule/${stage}`);
+          await updateDoc(scheduleRef, { timeSlots: newTimeSlots });
+        }
+      }
+    } catch (err) {
+      console.error('Error removing DJ from all schedules:', err);
+      setError('Failed to remove DJ.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const handleResetSchedule = async (stageToReset?: StageType) => {
     if (!window.confirm('Clear all slot assignments and return all DJs to the unassigned pool?')) return;
     setIsLoading(true);
@@ -978,6 +1024,7 @@ export default function App() {
             isDropZoneActive={dragCounter > 0}
             disabled={isLoading}
             allSchedules={[schedule, dubPubSchedule, technoHubSchedule]}
+            onRemoveDj={handleRemoveDjFromAll}
           />
         </aside>
 
@@ -1751,7 +1798,7 @@ function AdminSettings({ db, userId, appId }: { db: ReturnType<typeof getFiresto
 /**
  * Unassigned DJ Pool
  */
-function DJPool({ djs, onDjClick, onDragStart, onDragOver, onDragEnter, onDragLeave, onDrop, isDropZoneActive, disabled, allSchedules }: {
+function DJPool({ djs, onDjClick, onDragStart, onDragOver, onDragEnter, onDragLeave, onDrop, isDropZoneActive, disabled, allSchedules, onRemoveDj }: {
   djs: DJ[];
   onDjClick: (dj: DJ) => void;
   onDragStart: (e: React.DragEvent, data: unknown) => void;
@@ -1762,6 +1809,7 @@ function DJPool({ djs, onDjClick, onDragStart, onDragOver, onDragEnter, onDragLe
   isDropZoneActive: boolean;
   disabled: boolean;
   allSchedules: (Schedule | null)[];
+  onRemoveDj: (djId: string) => void;
 }) {
   // Helper: get assigned slots for a DJ across all stages
   const getDjSlots = (djId: string) => {
@@ -1797,6 +1845,7 @@ function DJPool({ djs, onDjClick, onDragStart, onDragOver, onDragEnter, onDragLe
                   onDragStart={(e) => onDragStart(e, { from: 'pool', dj })}
                   showInvite={djSlots.length > 0}
                   assignedSlots={djSlots}
+                  onRemove={() => onRemoveDj(dj.id!)}
                 />
               </div>
             );
@@ -2149,13 +2198,14 @@ function TimeSlot({ slot, slotIndex, allDjs, onDjClick, onDragStart, onDragOver,
 /**
  * Draggable/Clickable DJ Item
  */
-function DJItem({ dj, onClick, isDraggable, onDragStart, showInvite, assignedSlots }: {
+function DJItem({ dj, onClick, isDraggable, onDragStart, showInvite, assignedSlots, onRemove }: {
   dj: DJ;
   onClick: () => void;
   isDraggable: boolean;
   onDragStart: (e: React.DragEvent) => void;
   showInvite?: boolean;
   assignedSlots?: TimeSlot[];
+  onRemove?: () => void;
 }) {
   const [copied, setCopied] = useState(false);
   const placeholder = `https://placehold.co/40x40/374151/9CA3AF?text=${encodeURIComponent(dj.djName?.charAt(0) || 'D')}`;
@@ -2181,10 +2231,18 @@ function DJItem({ dj, onClick, isDraggable, onDragStart, showInvite, assignedSlo
     });
   };
 
+  const handleContextMenu = (e: React.MouseEvent) => {
+    e.preventDefault();
+    if (onRemove && window.confirm(`Remove ${dj.djName} from all schedules?`)) {
+      onRemove();
+    }
+  };
+
   return (
     <div
       draggable={isDraggable}
       onDragStart={onDragStart}
+      onContextMenu={handleContextMenu}
       className={`flex items-center bg-gray-900 p-2 rounded-md shadow-sm ${
         isDraggable ? 'cursor-move' : 'cursor-pointer'
       } border border-gray-700 hover:bg-gray-800 transition-colors`}
