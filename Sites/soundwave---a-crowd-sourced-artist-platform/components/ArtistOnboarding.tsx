@@ -95,9 +95,9 @@ const ArtistOnboarding: React.FC<ArtistOnboardingProps> = ({ onComplete, current
       // Upload avatar if provided
       let avatarUrl = 'https://picsum.photos/id/1015/200/200'; // Default avatar
       if (avatarFile) {
-        console.log('📤 Uploading avatar...');
-        avatarUrl = await uploadUserAvatar(avatarFile, currentUserId);
-        console.log('✅ Avatar uploaded:', avatarUrl.substring(0, 50));
+        console.log('📤 Avatar upload skipped (CORS issue) - using default avatar');
+        // TODO: Fix Firebase Storage CORS configuration
+        // avatarUrl = await uploadUserAvatar(avatarFile, currentUserId);
       } else {
         console.log('ℹ️ Using default avatar');
       }
