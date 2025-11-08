@@ -102,12 +102,12 @@ function App(): React.ReactNode {
       <div className="flex items-center justify-center min-h-screen bg-gray-900">
         <div className="text-center text-white">
           <h1 className="text-3xl font-bold mb-4">Authentication Required</h1>
-          <p className="mb-6">Please return to the portal to sign in.</p>
+          <p className="mb-6">Please sign in through the portal to access SoundWave.</p>
           <button 
-            onClick={() => window.location.href = '../index.html'}
+            onClick={() => window.location.href = '/Sites/soundwave/index.html'}
             className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg"
           >
-            Go to Portal
+            Go to SoundWave Gateway
           </button>
         </div>
       </div>
