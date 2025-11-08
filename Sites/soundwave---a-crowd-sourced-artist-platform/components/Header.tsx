@@ -1,13 +1,38 @@
-import React from 'react';
-import { NavLink, Link } from 'react-router-dom';
+import React, { useState, useRef, useEffect } from 'react';
+import { NavLink, Link, useNavigate } from 'react-router-dom';
 import { Icon } from './Icon';
 import { User } from '../types';
+import { auth } from '../services/firebaseService';
+import { signOut } from 'firebase/auth';
 
 interface HeaderProps {
   currentUser?: User | null;
 }
 
 const Header: React.FC<HeaderProps> = ({ currentUser }) => {
+  const navigate = useNavigate();
+  const [showUserMenu, setShowUserMenu] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+        setShowUserMenu(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const handleSignOut = async () => {
+    try {
+      await signOut(auth);
+      window.location.href = '/Sites/soundwave/index.html';
+    } catch (error) {
+      console.error('Error signing out:', error);
+    }
+  };
+
   const activeLinkStyle = {
     color: 'white',
     backgroundColor: '#282828'
@@ -117,14 +142,59 @@ const Header: React.FC<HeaderProps> = ({ currentUser }) => {
                 <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-xs font-bold text-white">3</span>
             </Link>
 
-            <Link to={`/profile/${currentUser?.id || 'user_1'}`} className="flex items-center space-x-2">
-              <img 
-                className="h-8 w-8 rounded-full object-cover" 
-                src={currentUser?.avatarUrl || 'https://picsum.photos/id/1015/100/100'} 
-                alt={`${currentUser?.name || 'User'} Avatar`} 
-              />
-              <span className="text-white font-medium hidden sm:block">{currentUser?.name || 'Guest'}</span>
-            </Link>
+            <div className="relative" ref={menuRef}>
+              <button
+                onClick={() => setShowUserMenu(!showUserMenu)}
+                className="flex items-center space-x-2 hover:opacity-80 transition-opacity"
+              >
+                <img 
+                  className="h-8 w-8 rounded-full object-cover border-2 border-transparent hover:border-brand-accent transition-colors" 
+                  src={currentUser?.avatarUrl || 'https://picsum.photos/id/1015/100/100'} 
+                  alt={`${currentUser?.name || 'User'} Avatar`} 
+                />
+                <span className="text-white font-medium hidden sm:block">{currentUser?.name || 'Guest'}</span>
+                <Icon name="chevron-down" className={`w-4 h-4 text-gray-400 transition-transform hidden sm:block ${showUserMenu ? 'rotate-180' : ''}`} />
+              </button>
+
+              {showUserMenu && (
+                <div className="absolute right-0 mt-2 w-56 bg-gray-800 rounded-lg shadow-xl border border-gray-700 py-2 z-50 animate-fadeIn">
+                  <div className="px-4 py-3 border-b border-gray-700">
+                    <p className="text-sm font-medium text-white">{currentUser?.name || 'Guest'}</p>
+                    <p className="text-xs text-gray-400 truncate">{auth.currentUser?.email || ''}</p>
+                  </div>
+                  
+                  {currentUser && (
+                    <>
+                      <Link
+                        to={`/profile/${currentUser.id}`}
+                        onClick={() => setShowUserMenu(false)}
+                        className="flex items-center px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white transition-colors"
+                      >
+                        <Icon name="user" className="w-4 h-4 mr-3" />
+                        View Profile
+                      </Link>
+                      <Link
+                        to="/settings/profile"
+                        onClick={() => setShowUserMenu(false)}
+                        className="flex items-center px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white transition-colors"
+                      >
+                        <Icon name="settings" className="w-4 h-4 mr-3" />
+                        Edit Profile
+                      </Link>
+                      <div className="border-t border-gray-700 my-2"></div>
+                    </>
+                  )}
+                  
+                  <button
+                    onClick={handleSignOut}
+                    className="flex items-center w-full px-4 py-2 text-sm text-red-400 hover:bg-gray-700 hover:text-red-300 transition-colors"
+                  >
+                    <Icon name="logout" className="w-4 h-4 mr-3" />
+                    Sign Out
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </div>
