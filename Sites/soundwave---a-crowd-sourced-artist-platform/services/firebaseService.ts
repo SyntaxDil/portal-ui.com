@@ -123,6 +123,10 @@ export const requireAuth = async (): Promise<FirebaseUser> => {
   return user;
 };
 
+export const getCurrentUserId = (): string | undefined => {
+  return auth.currentUser?.uid;
+};
+
 // Collection names
 const COLLECTIONS = {
   USERS: 'soundwave_users',
@@ -179,53 +183,99 @@ export const getUserById = async (id: string): Promise<User | undefined> => {
     }
     return undefined;
   } catch (error) {
-    console.error('Firestore Get user error:', error);
-    // Fallback to localStorage in case of error
-    const stored = localStorage.getItem(`soundwave_user_${id}`);
-    if (stored) {
-      console.log('📦 Fallback: Retrieved user from localStorage:', id);
-      return JSON.parse(stored) as User;
-    }
+    console.error('❌ [getUserById] Error:', error);
     return undefined;
   }
 };
 
 export const createOrUpdateUser = async (userData: Partial<User>): Promise<User> => {
+  console.log('💾 [createOrUpdateUser] Starting with data:', userData);
+  
+  const userId = userData.id || getCurrentUserId();
+  console.log('🔑 [createOrUpdateUser] User ID:', userId);
+  
+  if (!userId) {
+    const error = 'No user ID available - user must be authenticated';
+    console.error('❌ [createOrUpdateUser]', error);
+    throw new Error(error);
+  }
+
+  // Validate required fields with clear messages
+  if (!userData.name || userData.name.trim().length < 2) {
+    const error = `Artist name is required (got: "${userData.name}")`;
+    console.error('❌ [createOrUpdateUser]', error);
+    throw new Error(error);
+  }
+  if (!userData.bio || userData.bio.trim().length < 10) {
+    const error = `Bio must be at least 10 characters (got: ${userData.bio?.length || 0} chars)`;
+    console.error('❌ [createOrUpdateUser]', error);
+    throw new Error(error);
+  }
+  if (!userData.genre || userData.genre.trim().length === 0) {
+    const error = 'Genre is required';
+    console.error('❌ [createOrUpdateUser]', error);
+    throw new Error(error);
+  }
+
   try {
-    console.log('📝 Creating/updating user:', userData);
+    const userDoc: any = {
+      id: userId,
+      name: userData.name.trim(),
+      bio: userData.bio.trim(),
+      genre: userData.genre.trim(),
+      location: userData.location?.trim() || '',
+      avatarUrl: userData.avatarUrl || 'https://api.dicebear.com/7.x/avataaars/svg?seed=' + userId,
+      spotifyUrl: userData.spotifyUrl?.trim() || '',
+      soundcloudUrl: userData.soundcloudUrl?.trim() || '',
+      instagramUrl: userData.instagramUrl?.trim() || '',
+      twitterUrl: userData.twitterUrl?.trim() || '',
+      followers: userData.followers || 0,
+      following: userData.following || 0,
+      isVerified: userData.isVerified || false,
+      updatedAt: new Date().toISOString()
+    };
     
-    // Use the provided ID or get current user
-    const userId = userData.id || (await getCurrentUser())?.uid;
-    if (!userId) {
-      throw new Error('No user ID available');
+    // Check if user exists
+    console.log('🔍 [createOrUpdateUser] Checking if user exists...');
+    const existingUser = await getUserById(userId);
+    
+    if (!existingUser) {
+      console.log('➕ [createOrUpdateUser] Creating new user');
+      userDoc.createdAt = new Date().toISOString();
+    } else {
+      console.log('🔄 [createOrUpdateUser] Updating existing user');
     }
     
-    const userDoc = {
-      ...userData,
-      id: userId,
-      updatedAt: new Date().toISOString()
-    };
-    
-    // Try Firebase first
+    console.log('📤 [createOrUpdateUser] Writing to Firestore...');
     await setDoc(doc(db, COLLECTIONS.USERS, userId), userDoc, { merge: true });
-    console.log('✅ User saved to Firestore');
+    console.log('✅ [createOrUpdateUser] Write successful');
     
-    // Also save to localStorage as backup
-    localStorage.setItem(`soundwave_user_${userId}`, JSON.stringify(userDoc));
+    // Wait a moment for Firestore to process
+    await new Promise(resolve => setTimeout(resolve, 500));
     
-    return userDoc as User;
-  } catch (error) {
-    console.error('❌ Error creating/updating user:', error);
-    // Fallback to localStorage only
-    const userId = userData.id || 'unknown';
-    const userDoc = {
-      ...userData,
-      id: userId,
-      updatedAt: new Date().toISOString()
-    };
-    localStorage.setItem(`soundwave_user_${userId}`, JSON.stringify(userDoc));
-    console.log('✅ Fallback: User saved to localStorage');
-    return userDoc as User;
+    // Verify save by reading back
+    console.log('🔍 [createOrUpdateUser] Verifying save...');
+    const savedUser = await getUserById(userId);
+    
+    if (!savedUser) {
+      throw new Error('Profile was saved but could not be retrieved. Please refresh the page.');
+    }
+    
+    console.log('✨ [createOrUpdateUser] Success! Profile ready:', savedUser.name);
+    return savedUser;
+    
+  } catch (error: any) {
+    console.error('❌ [createOrUpdateUser] Failed:', error);
+    
+    // Check for specific Firestore errors
+    if (error.code === 'permission-denied') {
+      throw new Error('Permission denied. Please make sure Firebase rules are deployed.');
+    }
+    if (error.code === 'unavailable') {
+      throw new Error('Cannot connect to database. Please check your internet connection.');
+    }
+    
+    throw new Error(`Failed to save profile: ${error.message}`);
   }
 };
 

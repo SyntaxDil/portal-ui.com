@@ -93,13 +93,16 @@ const ArtistOnboarding: React.FC<ArtistOnboardingProps> = ({ onComplete, current
       });
 
       // Upload avatar if provided
-      let avatarUrl = 'https://picsum.photos/id/1015/200/200'; // Default avatar
+      // Using unique avatar per user (based on user ID) until Storage CORS is fixed
+      let avatarUrl = `https://api.dicebear.com/7.x/avataaars/svg?seed=${currentUserId}`;
+      
       if (avatarFile) {
-        console.log('📤 Avatar upload skipped (CORS issue) - using default avatar');
-        // TODO: Fix Firebase Storage CORS configuration
+        console.log('📤 Avatar upload temporarily disabled (Storage CORS pending)');
+        console.log('ℹ️ Using unique generated avatar instead');
+        // TODO: Re-enable once Storage CORS is configured
         // avatarUrl = await uploadUserAvatar(avatarFile, currentUserId);
       } else {
-        console.log('ℹ️ Using default avatar');
+        console.log('ℹ️ Using unique generated avatar for user:', currentUserId);
       }
       
       // Create user profile
@@ -134,8 +137,14 @@ const ArtistOnboarding: React.FC<ArtistOnboardingProps> = ({ onComplete, current
     }
   };
 
+  // Validation with helpful feedback
   const isStep1Valid = artistName.trim().length >= 2;
   const isStep2Valid = bio.trim().length >= 10 && genre.trim().length > 0;
+  
+  // Character counts for user feedback
+  const bioCharCount = bio.trim().length;
+  const bioMinChars = 10;
+  const bioIsValid = bioCharCount >= bioMinChars;
 
   return (
     <div className="fixed inset-0 bg-gray-900/95 backdrop-blur-sm z-50 flex items-center justify-center p-4">
@@ -248,12 +257,26 @@ const ArtistOnboarding: React.FC<ArtistOnboardingProps> = ({ onComplete, current
                 <textarea
                   value={bio}
                   onChange={(e) => setBio(e.target.value)}
-                  placeholder="Tell us about your music and journey..."
+                  placeholder="Tell us about your music and journey... (minimum 10 characters)"
                   rows={5}
-                  className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500 resize-none"
+                  className={`w-full px-4 py-3 bg-gray-700 border rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 resize-none ${
+                    bio.length > 0 && bioIsValid ? 'border-green-500 focus:ring-green-500' : 
+                    bio.length > 0 && !bioIsValid ? 'border-red-500 focus:ring-red-500' : 
+                    'border-gray-600 focus:ring-purple-500'
+                  }`}
                   maxLength={500}
                 />
-                <p className="text-xs text-gray-400 mt-1">{bio.length}/500 characters</p>
+                <div className="flex justify-between items-center mt-1">
+                  <p className={`text-xs ${
+                    bioIsValid ? 'text-green-400' : 
+                    bioCharCount > 0 ? 'text-red-400' : 'text-gray-400'
+                  }`}>
+                    {bioIsValid ? '✅ Bio looks good!' : 
+                     bioCharCount > 0 ? `⚠️ ${bioMinChars - bioCharCount} more characters needed` :
+                     'Minimum 10 characters required'}
+                  </p>
+                  <p className="text-xs text-gray-400">{bio.length}/500 characters</p>
+                </div>
               </div>
 
               <div>
@@ -364,6 +387,40 @@ const ArtistOnboarding: React.FC<ArtistOnboardingProps> = ({ onComplete, current
           )}
         </div>
 
+        {/* Error Display */}
+        {error && (
+          <div className="mx-6 mb-4 p-4 bg-red-900/50 border border-red-500 rounded-lg">
+            <div className="flex items-start gap-3">
+              <Icon name="alert-circle" className="w-5 h-5 text-red-400 flex-shrink-0 mt-0.5" />
+              <div className="flex-grow">
+                <p className="text-red-200 font-medium">Failed to create profile</p>
+                <p className="text-red-300 text-sm mt-1">{error}</p>
+              </div>
+              <button
+                onClick={() => {
+                  setError('');
+                  handleSubmit();
+                }}
+                className="px-4 py-2 bg-red-700 hover:bg-red-600 text-white rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
+              >
+                <Icon name="refresh" className="w-4 h-4" />
+                Retry
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Loading Display */}
+        {loading && (
+          <div className="mx-6 mb-4 p-4 bg-blue-900/50 border border-blue-500 rounded-lg flex items-center gap-3">
+            <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-400"></div>
+            <div>
+              <p className="text-blue-200 font-medium">Creating your profile...</p>
+              <p className="text-blue-300 text-sm mt-1">Saving to database, please wait...</p>
+            </div>
+          </div>
+        )}
+
         {/* Footer Buttons */}
         <div className="p-6 border-t border-gray-700 flex justify-between">
           {step > 1 && (
@@ -388,8 +445,16 @@ const ArtistOnboarding: React.FC<ArtistOnboardingProps> = ({ onComplete, current
               <Button
                 onClick={handleSubmit}
                 disabled={loading || !isStep1Valid || !isStep2Valid}
+                className="relative"
               >
-                {loading ? 'Creating Profile...' : 'Complete Setup'}
+                {loading && (
+                  <div className="absolute left-3 top-1/2 -translate-y-1/2">
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                  </div>
+                )}
+                <span className={loading ? 'ml-6' : ''}>
+                  {loading ? 'Creating Profile...' : 'Complete Setup'}
+                </span>
               </Button>
             )}
           </div>

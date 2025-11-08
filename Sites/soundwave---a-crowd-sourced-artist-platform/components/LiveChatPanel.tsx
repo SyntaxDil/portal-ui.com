@@ -1,17 +1,28 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { ChatMessage, User } from '../types';
-import { getUsers, getSampleChatMessages } from '../services/firebaseService';
+import { getUsers, getSampleChatMessages, auth, getUserById } from '../services/firebaseService';
 import { Icon } from './Icon';
 
 const LiveChatPanel: React.FC = () => {
     const [messages, setMessages] = useState<ChatMessage[]>([]);
     const [newMessage, setNewMessage] = useState('');
     const [allUsers, setAllUsers] = useState<User[]>([]);
+    const [currentUser, setCurrentUser] = useState<User | null>(null);
     const messagesEndRef = useRef<HTMLDivElement>(null);
     
-    // This is the current logged-in user, hardcoded for consistency
-    const currentUser: User = { id: 'user_1', name: 'Sub-Tropical', avatarUrl: 'https://picsum.photos/id/1015/200/200', bio: '' };
+    // Fetch current user profile
+    useEffect(() => {
+        const loadCurrentUser = async () => {
+            if (auth.currentUser) {
+                const user = await getUserById(auth.currentUser.uid);
+                if (user) {
+                    setCurrentUser(user);
+                }
+            }
+        };
+        loadCurrentUser();
+    }, []);
 
     // Fetch all users on component mount
     useEffect(() => {
@@ -20,7 +31,7 @@ const LiveChatPanel: React.FC = () => {
 
     // Effect to simulate live chat activity
     useEffect(() => {
-        if (allUsers.length === 0) return;
+        if (allUsers.length === 0 || !currentUser) return;
 
         const sampleMessages = getSampleChatMessages();
 
@@ -67,18 +78,16 @@ const LiveChatPanel: React.FC = () => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }, [messages]);
 
-    const handleSendMessage = (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!newMessage.trim()) return;
-
-        const userMessage: ChatMessage = {
+    const handleSendMessage = () => {
+        if (newMessage.trim() === '' || !currentUser) return;
+        
+        const message: ChatMessage = {
             id: `msg_${Date.now()}`,
             user: currentUser,
             text: newMessage,
             timestamp: new Date().toISOString(),
         };
-
-        setMessages(prev => [...prev, userMessage]);
+        setMessages(prev => [...prev, message]);
         setNewMessage('');
     };
 
