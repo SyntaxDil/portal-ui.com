@@ -36,7 +36,7 @@
         function addResult(message, isSuccess) {
             const div = document.createElement('div');
             div.className = `test-result ${isSuccess ? 'success' : 'error'}`;
-            div.textContent = message;
+            div.innerHTML = message; // Changed from textContent to innerHTML to render links
             results.appendChild(div);
         }
         
