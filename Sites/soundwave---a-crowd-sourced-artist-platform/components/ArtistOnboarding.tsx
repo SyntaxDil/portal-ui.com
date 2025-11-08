@@ -79,14 +79,27 @@ const ArtistOnboarding: React.FC<ArtistOnboardingProps> = ({ onComplete, current
   };
 
   const handleSubmit = async () => {
+    console.log('🚀 Starting profile creation...');
     setLoading(true);
     setError('');
     
     try {
+      console.log('📝 Profile data:', {
+        artistName,
+        bio: bio.substring(0, 50),
+        genre,
+        location,
+        hasAvatar: !!avatarFile
+      });
+
       // Upload avatar if provided
       let avatarUrl = 'https://picsum.photos/id/1015/200/200'; // Default avatar
       if (avatarFile) {
+        console.log('📤 Uploading avatar...');
         avatarUrl = await uploadUserAvatar(avatarFile, currentUserId);
+        console.log('✅ Avatar uploaded:', avatarUrl.substring(0, 50));
+      } else {
+        console.log('ℹ️ Using default avatar');
       }
       
       // Create user profile
@@ -106,13 +119,18 @@ const ArtistOnboarding: React.FC<ArtistOnboardingProps> = ({ onComplete, current
         isVerified: false,
       };
       
+      console.log('💾 Saving profile to Firestore...');
       const createdUser = await createOrUpdateUser(userData);
+      console.log('✅ Profile created successfully:', createdUser.id);
+      
+      console.log('🎉 Calling onComplete...');
       onComplete(createdUser);
     } catch (err: any) {
-      console.error('Error creating artist profile:', err);
+      console.error('❌ Error creating artist profile:', err);
       setError(err.message || 'Failed to create profile. Please try again.');
     } finally {
       setLoading(false);
+      console.log('✅ Profile creation process complete');
     }
   };
 
