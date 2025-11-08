@@ -6,33 +6,14 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>SoundWave - A Crowd Sourced Artist Platform</title>
     <!-- Load Firebase Config -->
+    <script src="./firebase-config.js"></script>
     <script>
-      // Try to load Firebase config from portal (production) or local (development)
-      (function() {
-        const isDev = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-        
-        if (isDev) {
-          // Development: load from public folder
-          const script = document.createElement('script');
-          script.src = '/firebase-config.js';
-          script.onload = () => console.log('✅ Firebase config loaded (dev):', window.FIREBASE_CONFIG?.projectId);
-          script.onerror = () => console.error('❌ Failed to load Firebase config');
-          document.head.appendChild(script);
-        } else {
-          // Production: load from parent portal
-          const script = document.createElement('script');
-          script.src = '../../js/firebase-config.js';
-          script.onload = () => console.log('✅ Firebase config loaded (prod):', window.FIREBASE_CONFIG?.projectId);
-          script.onerror = () => {
-            console.error('❌ Failed to load Firebase config from portal');
-            // Fallback to local
-            const fallback = document.createElement('script');
-            fallback.src = '/firebase-config.js';
-            document.head.appendChild(fallback);
-          };
-          document.head.appendChild(script);
-        }
-      })();
+      // Verify Firebase config loaded
+      if (window.FIREBASE_CONFIG) {
+        console.log('✅ Firebase config loaded:', window.FIREBASE_CONFIG.projectId);
+      } else {
+        console.error('❌ Firebase config not found!');
+      }
     </script>
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
