@@ -1,7 +1,7 @@
 {
   "name": "portal-ui-website",
   "version": "1.0.0",
-  "description": "Professional website hosted on GoDaddy with Registration landing page",
+  "description": "Professional website deployed via GitHub Pages with Firebase integration",
   "main": "Registration.html",
   "scripts": {
     "start": "npm run serve",
@@ -11,8 +11,9 @@
     "deploy:jacked:print": "node deploy.js --target jacked --print",
     "deploy:jacked:custom": "node deploy.js --local ./Sites/JackedDnb/site --remote /public_html/Sites/JackedDnb",
     "deploy:templedjs": "node deploy.js --target templedjs",
-  "deploy:backbones-templedjs": "node deploy.js --target templedjs_backbones",
+    "deploy:backbones-templedjs": "node deploy.js --target templedjs_backbones",
     "build": "echo 'No build step needed for static site'",
+    "build:soundwave": "cd Sites/soundwave---a-crowd-sourced-artist-platform && npm install && npm run build",
     "test": "echo 'No tests configured yet'"
   },
   "keywords": [

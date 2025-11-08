@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SoundWave - A Crowd Sourced Artist Platform</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            colors: {
+              'gray-900': '#121212',
+              'gray-800': '#181818',
+              'gray-700': '#282828',
+              'gray-600': '#404040',
+              'gray-500': '#535353',
+              'gray-400': '#B3B3B3',
+              'brand-accent': '#1DB954',
+              'brand-accent-hover': '#1ED760',
+            }
+          }
+        }
+      }
+    </script>
+    <style>
+      @keyframes spin-globe {
+        from { transform: rotateY(0deg); }
+        to { transform: rotateY(360deg); }
+      }
+      @keyframes ping {
+        0%, 100% {
+          transform: scale(1);
+          opacity: 0.7;
+        }
+        50% {
+          transform: scale(1.5);
+          opacity: 1;
+        }
+      }
+       @keyframes pulse-icon {
+        0%, 100% {
+          transform: scale(1);
+        }
+        50% {
+          transform: scale(1.15);
+        }
+      }
+       @keyframes pulse-highlight {
+        0%, 100% {
+          transform: scale(1.1);
+          box-shadow: 0 0 15px #1ED760;
+        }
+        50% {
+          transform: scale(1.2);
+           box-shadow: 0 0 25px #1ED760;
+        }
+      }
+      @keyframes pulse-highlight-purple {
+        0%, 100% {
+            transform: scale(1.1);
+            box-shadow: 0 0 15px #a855f7;
+        }
+        50% {
+            transform: scale(1.2);
+            box-shadow: 0 0 25px #a855f7;
+        }
+      }
+      @keyframes float {
+        0% { transform: translateY(0px) rotateY(0deg) rotateX(0deg); }
+        50% { transform: translateY(-15px) rotateY(180deg) rotateX(10deg); }
+        100% { transform: translateY(0px) rotateY(360deg) rotateX(0deg); }
+      }
+      @keyframes float-node {
+          0%, 100% { transform: translateY(0px) scale(1); }
+          50% { transform: translateY(-5px) scale(1.05); }
+      }
+       @keyframes focus-zoom {
+          to { transform: scale(1.1); }
+       }
+      
+      @keyframes audio-bars {
+        0% { transform: scaleY(0.2); }
+        25% { transform: scaleY(1); }
+        50% { transform: scaleY(0.4); }
+        75% { transform: scaleY(0.8); }
+        100% { transform: scaleY(0.2); }
+      }
+      .audio-bar {
+        animation: audio-bars 1.2s infinite ease-in-out;
+      }
+
+      /* Globalizer: GEO MODE */
+      .globe-container {
+        perspective: 1000px;
+      }
+      .globe {
+        width: 200px;
+        height: 200px;
+        position: relative;
+        transform-style: preserve-3d;
+        animation: spin-globe 30s linear infinite;
+      }
+      .globe-shadow {
+        position: absolute;
+        bottom: 25%;
+        left: 50%;
+        transform: translateX(-50%) rotateX(90deg);
+        width: 200px;
+        height: 200px;
+        background: radial-gradient(circle, #1DB95430 10%, transparent 60%);
+        border-radius: 50%;
+      }
+      .globe-slice {
+        position: absolute;
+        width: 200px;
+        height: 200px;
+        border-radius: 50%;
+        border: 1px solid #1DB95440; /* Faint meridian lines */
+        background: radial-gradient(circle, transparent 65%, #1DB95410 85%); /* Faint atmospheric glow */
+        transform-style: preserve-3d;
+      }
+
+      /* Globalizer: UNIVERSE MODE */
+      .universe-container {
+          width: 100%;
+          height: 100%;
+          position: relative;
+          perspective: 1200px;
+          cursor: grab;
+      }
+      .universe-container:active {
+          cursor: grabbing;
+      }
+      .universe-core {
+          width: 100%;
+          height: 100%;
+          position: absolute;
+          transform-style: preserve-3d;
+          transition: transform 0.8s ease-in-out; /* Smooth camera movements */
+      }
+      .universe-node {
+          position: absolute;
+          top: 50%;
+          left: 50%;
+          transform-style: preserve-3d;
+          font-weight: bold;
+          animation: float-node 7s ease-in-out infinite;
+          backdrop-filter: blur(2px);
+          cursor: pointer;
+          transition: all 0.3s ease;
+          /* New Bubble Styling */
+          border-radius: 50%;
+          border: 2px solid #FFD70080; /* Yellow border */
+          color: #FFD700;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          text-align: center;
+          transform: translate(-50%, -50%);
+      }
+      .universe-node:hover {
+        border-color: #FFD700;
+      }
+      .universe-node.focused {
+          animation: focus-zoom 0.5s forwards;
+          border-color: #FFD700;
+      }
+      .universe-node.dimmed {
+          opacity: 0.3;
+          filter: blur(1px);
+      }
+       .universe-event-ping {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        cursor: pointer;
+        transform-style: preserve-3d;
+        animation: float 15s ease-in-out infinite;
+        transition: all 0.3s ease;
+      }
+      .universe-event-ping.dimmed {
+          opacity: 0.1;
+          transform: scale(0.8);
+      }
+      /* New Artist Dot styling */
+      .universe-event-ping .event-ping-icon {
+        background-color: rgba(168, 85, 247, 0.2); /* Purple */
+        border: 1px solid rgba(168, 85, 247, 0.5);
+      }
+      .universe-event-ping .event-ping-icon svg {
+        color: #c084fc; /* light purple */
+      }
+      .universe-event-ping:hover .event-ping-icon {
+        background-color: rgba(168, 85, 247, 0.5);
+      }
+      .universe-event-ping .event-ping-icon.highlight {
+          animation: pulse-highlight-purple 1.5s infinite ease-in-out;
+      }
+
+      /* Globalizer: COUNTRY MODE */
+      .country-view-container {
+        width: 100%;
+        height: 100%;
+        position: relative;
+      }
+      .country-view-wrapper {
+        width: 100%;
+        height: 100%;
+        position: absolute;
+        transition: transform 0.3s ease;
+      }
+      .country-bubble {
+          position: absolute;
+          border-radius: 50%;
+          border: 2px solid #FFD70080; /* Yellow border */
+          background-color: rgba(29, 185, 84, 0.1);
+          color: white;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-weight: bold;
+          cursor: pointer;
+          transition: all 0.3s ease-in-out;
+          backdrop-filter: blur(1px);
+          transform: translate(-50%, -50%);
+          text-align: center;
+          padding: 4px;
+      }
+      .country-bubble:hover {
+          transform: translate(-50%, -50%) scale(1.1);
+          border-color: #FFD700;
+          background-color: rgba(29, 185, 84, 0.3);
+      }
+      .country-bubble.active {
+          border-color: #1ED760;
+          background-color: rgba(29, 185, 84, 0.4);
+          transform: translate(-50%, -50%) scale(1.2);
+      }
+      .country-bubble.dimmed {
+          opacity: 0.2;
+          filter: blur(2px);
+      }
+      .local-event-ping {
+          position: absolute;
+          width: 20px;
+          height: 20px;
+          border-radius: 50%;
+          background-color: #1ED760;
+          animation: ping 2s infinite ease-in-out;
+          transform-origin: center;
+          transform: translate(-50%, -50%);
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+      }
+
+      /* Shared styles */
+      .event-ping {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        cursor: pointer;
+        transform-style: preserve-3d;
+      }
+      .event-ping-icon {
+        width: 100%;
+        height: 100%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 50%;
+        background-color: rgba(29, 185, 84, 0.2);
+        backdrop-filter: blur(2px);
+        transition: all 0.2s ease-in-out;
+        animation: pulse-icon 2s infinite ease-in-out;
+      }
+      .event-ping:hover .event-ping-icon {
+        background-color: rgba(29, 185, 84, 0.5);
+        transform: scale(1.2);
+      }
+      .event-info-box {
+        min-height: 100px; /* Reserve space to prevent layout shift */
+      }
+    </style>
+
+<link rel="stylesheet" href="/index.css">
+  <script type="importmap">
+{
+  "imports": {
+    "react/": "https://esm.sh/react@^19.1.1/",
+    "react": "https://esm.sh/react@^19.1.1",
+    "react-dom/": "https://esm.sh/react-dom@^19.1.1/",
+    "react-router-dom": "https://esm.sh/react-router-dom@^7.8.0",
+    "@google/genai": "https://esm.sh/@google/genai@^1.13.0"
+  }
+}
+</script>
+  <script type="module" crossorigin src="/Sites/soundwave/app/assets/index-X9UDe2GV.js"></script>
+</head>
+  <body class="bg-gray-900 text-gray-300">
+    <div id="root"></div>
+  </body>
+</html>

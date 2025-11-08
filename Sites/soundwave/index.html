@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SoundWave - Portal Access</title>
+    <link rel="stylesheet" href="../../css/styles.css">
+    <style>
+        .soundwave-gateway {
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 2rem;
+        }
+        
+        .gateway-card {
+            background: white;
+            border-radius: 20px;
+            padding: 3rem 2rem;
+            max-width: 500px;
+            width: 100%;
+            text-align: center;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+        }
+        
+        .soundwave-logo {
+            font-size: 2.5rem;
+            font-weight: bold;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 1rem;
+        }
+        
+        .loading-spinner {
+            display: inline-block;
+            width: 40px;
+            height: 40px;
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 1rem 0;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .access-button {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            border: none;
+            padding: 1rem 2rem;
+            border-radius: 10px;
+            font-size: 1.1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s;
+            margin: 1rem 0.5rem;
+        }
+        
+        .access-button:hover {
+            transform: translateY(-2px);
+        }
+        
+        .access-button.secondary {
+            background: transparent;
+            color: #667eea;
+            border: 2px solid #667eea;
+        }
+        
+        .access-button.secondary:hover {
+            background: #667eea;
+            color: white;
+        }
+        
+        .user-welcome {
+            background: #f0f9ff;
+            border: 1px solid #0ea5e9;
+            border-radius: 10px;
+            padding: 1.5rem;
+            margin: 1rem 0;
+        }
+        
+        .user-avatar {
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            margin: 0 auto 1rem;
+            background: #667eea;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 1.5rem;
+            font-weight: bold;
+        }
+        
+        .status-message {
+            margin: 1rem 0;
+            padding: 1rem;
+            border-radius: 8px;
+        }
+        
+        .status-success {
+            background: #ecfdf5;
+            color: #065f46;
+            border: 1px solid #10b981;
+        }
+        
+        .status-error {
+            background: #fef2f2;
+            color: #991b1b;
+            border: 1px solid #ef4444;
+        }
+        
+        .hidden {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="soundwave-gateway">
+        <div class="gateway-card">
+            <div class="soundwave-logo">🎵 SoundWave</div>
+            <p class="text-gray-600">A crowd-sourced artist platform</p>
+            
+            <!-- Loading State -->
+            <div id="loadingState">
+                <div class="loading-spinner"></div>
+                <p>Checking authentication...</p>
+            </div>
+            
+            <!-- Not Authenticated State -->
+            <div id="notAuthState" class="hidden">
+                <h2>Access Required</h2>
+                <p class="text-gray-600 mb-4">
+                    Please register or login to access the SoundWave platform.
+                </p>
+                <button class="access-button" onclick="redirectToRegistration()">
+                    Register Now
+                </button>
+                <button class="access-button secondary" onclick="redirectToLogin()">
+                    Login
+                </button>
+            </div>
+            
+            <!-- Authenticated State -->
+            <div id="authState" class="hidden">
+                <div class="user-welcome">
+                    <div class="user-avatar" id="userAvatar"></div>
+                    <h3>Welcome back!</h3>
+                    <p id="userEmail"></p>
+                </div>
+                <button class="access-button" onclick="enterSoundWave()">
+                    Enter SoundWave Platform
+                </button>
+                <br>
+                <button class="access-button secondary" onclick="signOut()">
+                    Sign Out
+                </button>
+            </div>
+            
+            <!-- Status Messages -->
+            <div id="statusMessage" class="hidden"></div>
+        </div>
+    </div>
+
+    <!-- Firebase Scripts -->
+    <script src="../../js/firebase-config.js"></script>
+    <script type="module">
+        import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
+        import { getAuth, onAuthStateChanged, signOut as firebaseSignOut } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
+        import { getFirestore, doc, getDoc, setDoc } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+
+        // Initialize Firebase
+        let app, auth, db;
+        try {
+            app = initializeApp(firebaseConfig);
+            auth = getAuth(app);
+            db = getFirestore(app);
+        } catch (error) {
+            console.error('Firebase initialization error:', error);
+            showError('Firebase configuration error. Please check your setup.');
+        }
+
+        // DOM Elements
+        const loadingState = document.getElementById('loadingState');
+        const notAuthState = document.getElementById('notAuthState');
+        const authState = document.getElementById('authState');
+        const statusMessage = document.getElementById('statusMessage');
+        const userEmail = document.getElementById('userEmail');
+        const userAvatar = document.getElementById('userAvatar');
+
+        // Show/Hide States
+        function showLoading() {
+            hideAll();
+            loadingState.classList.remove('hidden');
+        }
+
+        function showNotAuthenticated() {
+            hideAll();
+            notAuthState.classList.remove('hidden');
+        }
+
+        function showAuthenticated(user) {
+            hideAll();
+            authState.classList.remove('hidden');
+            
+            // Update user info
+            userEmail.textContent = user.email;
+            userAvatar.textContent = user.email.charAt(0).toUpperCase();
+            
+            // Check if user has SoundWave service preference
+            checkSoundWaveAccess(user.uid);
+        }
+
+        function hideAll() {
+            loadingState.classList.add('hidden');
+            notAuthState.classList.add('hidden');
+            authState.classList.add('hidden');
+            statusMessage.classList.add('hidden');
+        }
+
+        function showMessage(message, type = 'success') {
+            statusMessage.textContent = message;
+            statusMessage.className = `status-message status-${type}`;
+            statusMessage.classList.remove('hidden');
+        }
+
+        function showError(message) {
+            showMessage(message, 'error');
+        }
+
+        // Check SoundWave access permissions
+        async function checkSoundWaveAccess(uid) {
+            try {
+                const userDoc = await getDoc(doc(db, 'users', uid));
+                if (userDoc.exists()) {
+                    const userData = userDoc.data();
+                    if (userData.serviceType === 'soundwave') {
+                        showMessage('SoundWave access confirmed!', 'success');
+                    } else {
+                        showMessage('Note: Consider selecting SoundWave as your service preference in your account settings.');
+                    }
+                }
+            } catch (error) {
+                console.error('Error checking SoundWave access:', error);
+                // Don't block access if there's an error checking preferences
+            }
+        }
+
+        // Auth state listener
+        onAuthStateChanged(auth, (user) => {
+            if (user) {
+                // User is signed in
+                if (user.emailVerified) {
+                    showAuthenticated(user);
+                } else {
+                    showError('Please verify your email address before accessing SoundWave.');
+                    showNotAuthenticated();
+                }
+            } else {
+                // User is signed out
+                showNotAuthenticated();
+            }
+        });
+
+        // Global functions for buttons
+        window.redirectToRegistration = function() {
+            window.location.href = '../../Registration.html?site=soundwave';
+        };
+
+        window.redirectToLogin = function() {
+            window.location.href = '../../login.html?redirect=' + encodeURIComponent(window.location.pathname);
+        };
+
+        window.enterSoundWave = function() {
+            showLoading();
+            // Redirect to the built SoundWave app
+            window.location.href = './app/index.html';
+        };
+
+        window.signOut = async function() {
+            try {
+                await firebaseSignOut(auth);
+                showMessage('Signed out successfully', 'success');
+                setTimeout(() => {
+                    window.location.href = '../../';
+                }, 1500);
+            } catch (error) {
+                console.error('Sign out error:', error);
+                showError('Error signing out. Please try again.');
+            }
+        };
+
+        // Initialize the page
+        showLoading();
+    </script>
+</body>
+</html>

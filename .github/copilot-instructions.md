@@ -1,10 +1,11 @@
-# Website Project - Copilot Instructions
+# Portal UI Website - Copilot Instructions
 
 ## Project Overview
-This is a professional website project configured for deployment to GoDaddy hosting.
+This is a professional website project deployed via GitHub Pages with custom domain.
 - Main landing page: Registration.html
-- Static website with HTML/CSS/JavaScript
-- FTP deployment to GoDaddy
+- Technology: HTML/CSS/JavaScript + Firebase (Auth + Firestore)
+- Deployment: GitHub Pages (automatic on push to main)
+- Live URL: https://www.portal-ui.com
 
 ## Project Structure
 - `/` - Root directory (maps to public_html on GoDaddy)
@@ -22,6 +23,7 @@ This is a professional website project configured for deployment to GoDaddy host
 - Follow modern web standards
 
 ## Deployment
-- Use `npm run deploy` to upload via FTP to GoDaddy
-- Ensure .env file has correct FTP credentials
-- Test at yourdomain.com/Registration.html after deployment
+- Automatic deployment via GitHub Pages on push to main branch
+- No build step required - static files served directly
+- Changes live at https://www.portal-ui.com within 1-2 minutes
+- Use `git push origin main` to deploy changes

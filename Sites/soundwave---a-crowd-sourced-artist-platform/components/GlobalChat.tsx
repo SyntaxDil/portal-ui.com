@@ -1,5 +1,5 @@
 
-import React, 'react';
+import React from 'react';
 import { Icon } from './Icon';
 import { ChatMessage, User } from '../types';
 import { getUsers } from '../services/mockData';
