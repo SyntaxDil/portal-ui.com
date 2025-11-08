@@ -382,13 +382,16 @@ export default function App() {
         for (let i = start; i <= end; i++) {
           const target = { ...newTimeSlots[i] };
           if (assignAsGuest) {
+            // Only add as guest if slot has a DIFFERENT main DJ
             if (target.djId && target.djId !== djId) {
               const guests = Array.isArray(target.guests) ? [...target.guests] : [];
               if (!guests.find(g => g.djId === djId)) guests.push({ djId, djName });
               newTimeSlots[i] = { ...target, guests };
-            } else {
+            } else if (!target.djId) {
+              // If slot is empty, assign as main DJ instead of guest
               newTimeSlots[i] = { ...target, djId, djName };
             }
+            // If target.djId === djId, do nothing (already assigned)
           } else {
             newTimeSlots[i] = { ...target, djId, djName };
           }
@@ -414,12 +417,12 @@ export default function App() {
           // DJ is not scheduled yet
           const target = { ...newTimeSlots[targetSlotIndex] };
           if (target.djId && target.djId !== djId) {
-            // Slot already has a main DJ — add as guest to allow overlap
+            // Slot already has a DIFFERENT main DJ — add as guest to allow overlap
             const guests = Array.isArray(target.guests) ? [...target.guests] : [];
             if (!guests.find(g => g.djId === djId)) guests.push({ djId, djName });
             newTimeSlots[targetSlotIndex] = { ...target, guests };
           } else {
-            // Empty slot (or same DJ)
+            // Empty slot or same DJ - assign as main
             newTimeSlots[targetSlotIndex] = { ...target, djId, djName };
           }
         }
@@ -441,22 +444,36 @@ export default function App() {
           // Overlap into target (copy), keep source as-is
           const sourceSlot = { ...newTimeSlots[sourceSlotIndex] };
           const targetSlot = { ...newTimeSlots[targetSlotIndex] };
-          if (targetSlot.djId && targetSlot.djId !== sourceSlot.djId) {
+          
+          // Only add as guest if source has a DJ and target has a different main DJ
+          if (sourceSlot.djId && targetSlot.djId && targetSlot.djId !== sourceSlot.djId) {
             const guests = Array.isArray(targetSlot.guests) ? [...targetSlot.guests] : [];
-            if (sourceSlot.djId && !guests.find(g => g.djId === sourceSlot.djId)) {
+            // Prevent duplicates: don't add if already a guest OR if same as target main DJ
+            if (!guests.find(g => g.djId === sourceSlot.djId)) {
               guests.push({ djId: sourceSlot.djId, djName: sourceSlot.djName || '' });
               newTimeSlots[targetSlotIndex] = { ...targetSlot, guests };
             }
-          } else {
-            // If empty or same, just assign
+          } else if (!targetSlot.djId && sourceSlot.djId) {
+            // If target is empty, assign as main DJ
             newTimeSlots[targetSlotIndex] = { ...targetSlot, djId: sourceSlot.djId, djName: sourceSlot.djName };
           }
         } else {
+          // Swap main DJs AND their guests arrays
           const sourceSlot = { ...newTimeSlots[sourceSlotIndex] };
           const targetSlot = { ...newTimeSlots[targetSlotIndex] };
-          // Swap 'em
-          newTimeSlots[targetSlotIndex] = { ...targetSlot, djId: sourceSlot.djId, djName: sourceSlot.djName };
-          newTimeSlots[sourceSlotIndex] = { ...sourceSlot, djId: targetSlot.djId, djName: targetSlot.djName };
+          
+          newTimeSlots[targetSlotIndex] = { 
+            ...targetSlot, 
+            djId: sourceSlot.djId, 
+            djName: sourceSlot.djName,
+            guests: sourceSlot.guests || []
+          };
+          newTimeSlots[sourceSlotIndex] = { 
+            ...sourceSlot, 
+            djId: targetSlot.djId, 
+            djName: targetSlot.djName,
+            guests: targetSlot.guests || []
+          };
         }
       }
       
@@ -532,11 +549,11 @@ export default function App() {
                return { time: slot.time, djId: null, djName: null, guests: [] };
              }
              // If this DJ is in the guests array, remove them
-             if (slot.guests && slot.guests.some(g => g.id === draggedDjId)) {
+             if (slot.guests && slot.guests.some(g => g.djId === draggedDjId)) {
                modified = true;
                return { 
                  ...slot, 
-                 guests: slot.guests.filter(g => g.id !== draggedDjId) 
+                 guests: slot.guests.filter(g => g.djId !== draggedDjId) 
                };
              }
              return slot;
@@ -633,19 +650,34 @@ export default function App() {
       const newTimeSlots = [...targetSchedule.timeSlots];
       const startIndex = stageSlots[0];
       
-      // Mark the first slot as merged start
+      // Consolidate all guests from the merged slots into the first slot
+      const allGuests: Array<{ djId: string; djName: string }> = [];
+      for (const slotIdx of stageSlots) {
+        const slot = newTimeSlots[slotIdx];
+        if (slot.guests && Array.isArray(slot.guests)) {
+          for (const guest of slot.guests) {
+            if (!allGuests.find(g => g.djId === guest.djId)) {
+              allGuests.push(guest);
+            }
+          }
+        }
+      }
+      
+      // Mark the first slot as merged start with consolidated guests
       newTimeSlots[startIndex] = {
         ...newTimeSlots[startIndex],
         isMergedStart: true,
-        mergedCount: stageSlots.length
+        mergedCount: stageSlots.length,
+        guests: allGuests
       };
 
-      // Mark continuation slots
+      // Mark continuation slots and clear their guests
       for (let i = 1; i < stageSlots.length; i++) {
         const slotIndex = stageSlots[i];
         newTimeSlots[slotIndex] = {
           ...newTimeSlots[slotIndex],
-          mergedWith: startIndex
+          mergedWith: startIndex,
+          guests: [] // Clear guests from continuation slots
         };
       }
 
@@ -673,24 +705,32 @@ export default function App() {
       const slot = newTimeSlots[index];
 
       if (slot.isMergedStart && slot.mergedCount) {
-        // Unmerge all slots in this block
+        // Unmerge all slots in this block, preserve guests on first slot only
+        const guestsToKeep = slot.guests || [];
         delete newTimeSlots[index].isMergedStart;
         delete newTimeSlots[index].mergedCount;
 
         for (let i = index + 1; i < index + slot.mergedCount; i++) {
           delete newTimeSlots[i].mergedWith;
+          // Continuation slots should have empty guests after unmerge
+          newTimeSlots[i] = { ...newTimeSlots[i], guests: [] };
         }
+        // Keep guests on the start slot
+        newTimeSlots[index] = { ...newTimeSlots[index], guests: guestsToKeep };
       } else if (slot.mergedWith !== undefined) {
         // This is a continuation slot, unmerge the entire block
         const startIndex = slot.mergedWith;
         const startSlot = newTimeSlots[startIndex];
         if (startSlot.mergedCount) {
+          const guestsToKeep = startSlot.guests || [];
           delete newTimeSlots[startIndex].isMergedStart;
           delete newTimeSlots[startIndex].mergedCount;
 
           for (let i = startIndex + 1; i < startIndex + startSlot.mergedCount; i++) {
             delete newTimeSlots[i].mergedWith;
+            newTimeSlots[i] = { ...newTimeSlots[i], guests: [] };
           }
+          newTimeSlots[startIndex] = { ...newTimeSlots[startIndex], guests: guestsToKeep };
         }
       }
 
