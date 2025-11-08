@@ -180,9 +180,14 @@
         // Initialize Firebase
         let app, auth, db;
         try {
-            app = initializeApp(firebaseConfig);
+            console.log('Firebase config loaded:', window.FIREBASE_CONFIG ? 'Yes' : 'No');
+            if (!window.FIREBASE_CONFIG) {
+                throw new Error('Firebase configuration not found');
+            }
+            app = initializeApp(window.FIREBASE_CONFIG);
             auth = getAuth(app);
             db = getFirestore(app);
+            console.log('Firebase initialized successfully');
         } catch (error) {
             console.error('Firebase initialization error:', error);
             showError('Firebase configuration error. Please check your setup.');
@@ -304,6 +309,18 @@
 
         // Initialize the page
         showLoading();
+        
+        // Timeout fallback in case auth doesn't initialize
+        setTimeout(() => {
+            if (loadingState && !loadingState.classList.contains('hidden')) {
+                console.error('Auth timeout - showing not authenticated state');
+                showNotAuthenticated();
+            }
+        }, 5000);
+    </script>
+</body>
+</html>
+```
     </script>
 </body>
 </html>
