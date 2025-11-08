@@ -34,6 +34,7 @@ import {
 // This will be loaded from the parent window or environment
 declare global {
   interface Window {
+    FIREBASE_CONFIG: any;
     firebaseConfig: any;
   }
 }
@@ -42,18 +43,25 @@ declare global {
 let firebaseConfig: any;
 
 try {
-  // Try to get config from parent window (when embedded)
-  if (window.parent && window.parent !== window) {
-    firebaseConfig = window.parent.firebaseConfig;
+  // Try to get config from window.FIREBASE_CONFIG (main portal config)
+  if (window.FIREBASE_CONFIG) {
+    firebaseConfig = window.FIREBASE_CONFIG;
+    console.log('Using window.FIREBASE_CONFIG');
   }
-  
+  // Try to get config from parent window (when embedded)
+  else if (window.parent && window.parent !== window) {
+    firebaseConfig = (window.parent as any).FIREBASE_CONFIG || window.parent.firebaseConfig;
+    console.log('Using parent window config');
+  }
   // Fallback to local config
-  if (!firebaseConfig && window.firebaseConfig) {
+  else if (window.firebaseConfig) {
     firebaseConfig = window.firebaseConfig;
+    console.log('Using window.firebaseConfig');
   }
   
   // Development fallback
   if (!firebaseConfig) {
+    console.warn('No Firebase config found, using demo config');
     firebaseConfig = {
       apiKey: "demo-api-key",
       authDomain: "demo-project.firebaseapp.com",
