@@ -496,10 +496,11 @@ export default function App() {
          if (!targetSchedule) return;
          
          const newTimeSlots = [...targetSchedule.timeSlots];
+         const slotToClear = newTimeSlots[sourceSlotIndex];
          
          // Clear the slot completely (main DJ, guests, and merge properties)
          newTimeSlots[sourceSlotIndex] = { 
-           time: newTimeSlots[sourceSlotIndex].time,
+           time: slotToClear.time,
            djId: null, 
            djName: null,
            guests: []
@@ -508,8 +509,46 @@ export default function App() {
          // Update Firestore with correct stage path
          const scheduleRef = doc(db!, `${sharedMode ? `apps/${appId}` : `users/${userId}/apps/${appId}`}/schedule/${sourceStage}`);
          await updateDoc(scheduleRef, { timeSlots: newTimeSlots });
+      } else if (sourceData.from === 'pool') {
+         // --- Dragging DJ from POOL to UNASSIGN = Remove from ALL slots ---
+         const draggedDjId = sourceData.djId;
+         
+         // Get all three schedules
+         const allSchedules = [
+           { schedule, stage: 'mainStage' as StageType },
+           { schedule: dubPubSchedule, stage: 'dubPub' as StageType },
+           { schedule: technoHubSchedule, stage: 'technoHub' as StageType }
+         ];
+         
+         // Remove this DJ from ALL slots across ALL stages (both as main DJ and as guest)
+         for (const { schedule: sched, stage } of allSchedules) {
+           if (!sched) continue;
+           
+           let modified = false;
+           const newTimeSlots = sched.timeSlots.map(slot => {
+             // If this is the main DJ, clear the slot
+             if (slot.djId === draggedDjId) {
+               modified = true;
+               return { time: slot.time, djId: null, djName: null, guests: [] };
+             }
+             // If this DJ is in the guests array, remove them
+             if (slot.guests && slot.guests.some(g => g.id === draggedDjId)) {
+               modified = true;
+               return { 
+                 ...slot, 
+                 guests: slot.guests.filter(g => g.id !== draggedDjId) 
+               };
+             }
+             return slot;
+           });
+           
+           // Only update if we actually modified something
+           if (modified) {
+             const scheduleRef = doc(db!, `${sharedMode ? `apps/${appId}` : `users/${userId}/apps/${appId}`}/schedule/${stage}`);
+             await updateDoc(scheduleRef, { timeSlots: newTimeSlots });
+           }
+         }
       }
-      // If dragging from pool, do nothing
       
     } catch (err) {
       console.error('Error unassigning DJ:', err);
