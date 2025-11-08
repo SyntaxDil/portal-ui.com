@@ -497,8 +497,13 @@ export default function App() {
          
          const newTimeSlots = [...targetSchedule.timeSlots];
          
-         // Clear the slot
-         newTimeSlots[sourceSlotIndex] = { ...newTimeSlots[sourceSlotIndex], djId: null, djName: null };
+         // Clear the slot completely (main DJ, guests, and merge properties)
+         newTimeSlots[sourceSlotIndex] = { 
+           time: newTimeSlots[sourceSlotIndex].time,
+           djId: null, 
+           djName: null,
+           guests: []
+         };
          
          // Update Firestore with correct stage path
          const scheduleRef = doc(db!, `${sharedMode ? `apps/${appId}` : `users/${userId}/apps/${appId}`}/schedule/${sourceStage}`);
@@ -529,7 +534,8 @@ export default function App() {
       const newTimeSlots = targetSchedule.timeSlots.map(slot => ({
         time: slot.time,
         djId: null,
-        djName: null
+        djName: null,
+        guests: []
       }));
       await updateDoc(scheduleRef, { timeSlots: newTimeSlots });
     } catch (err) {
