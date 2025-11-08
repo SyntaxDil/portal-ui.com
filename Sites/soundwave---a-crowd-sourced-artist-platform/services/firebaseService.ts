@@ -91,19 +91,16 @@ export const auth = getAuth(app);
 export const db = getFirestore(app);
 export const storage = getStorage(app);
 
-// Connect to emulators in development
-const isDev = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-if (isDev) {
-  try {
-    // Connect to emulators if running locally
-    connectAuthEmulator(auth, 'http://localhost:9099', { disableWarnings: true });
-    connectFirestoreEmulator(db, 'localhost', 8080);
-    connectStorageEmulator(storage, 'localhost', 9199);
-  } catch (error) {
-    // Emulators not running, continue with production Firebase
-    console.log('Firebase emulators not available, using production');
-  }
-}
+// Note: Emulator connections disabled to ensure production Firebase works correctly
+// If you need emulators for local development, uncomment and configure:
+// const isDev = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+// if (isDev) {
+//   connectAuthEmulator(auth, 'http://localhost:9099', { disableWarnings: true });
+//   connectFirestoreEmulator(db, 'localhost', 8080);
+//   connectStorageEmulator(storage, 'localhost', 9199);
+// }
+
+console.log('✅ Firebase initialized with project:', firebaseConfig.projectId);
 
 // Types
 import { User, Track, Post, Comment, Label, GlobalEvent } from '../types';
