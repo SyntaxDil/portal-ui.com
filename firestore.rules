@@ -1,0 +1,95 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Per-user private namespace
+    match /users/{userId}/apps/{appId}/{document=**} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+
+    // Shared app namespace (Temple)
+    match /apps/{appId}/{document=**} {
+      allow read, write: if request.auth != null;
+    }
+
+    // SoundWave Users Collection
+    match /soundwave_users/{userId} {
+      allow read: if true;
+      allow write: if request.auth != null && request.auth.uid == userId;
+    }
+    
+    // SoundWave Tracks Collection
+    match /soundwave_tracks/{trackId} {
+      allow read: if true;
+      allow create: if request.auth != null;
+      allow update, delete: if request.auth != null && request.auth.uid == resource.data.artistId;
+    }
+    
+    // SoundWave Posts Collection
+    match /soundwave_posts/{postId} {
+      allow read: if true;
+      allow create: if request.auth != null;
+      allow update, delete: if request.auth != null && request.auth.uid == resource.data.authorId;
+    }
+    
+    // SoundWave Comments Collection
+    match /soundwave_comments/{commentId} {
+      allow read: if true;
+      allow create: if request.auth != null;
+      allow update, delete: if request.auth != null && request.auth.uid == resource.data.authorId;
+    }
+    
+    // SoundWave Labels Collection
+    match /soundwave_labels/{labelId} {
+      allow read: if true;
+      allow write: if request.auth != null;
+    }
+    
+    // SoundWave Playlists Collection
+    match /soundwave_playlists/{playlistId} {
+      allow read: if true;
+      allow create: if request.auth != null;
+      allow update, delete: if request.auth != null && request.auth.uid == resource.data.curatorId;
+    }
+    
+    // SoundWave Masterclasses Collection
+    match /soundwave_masterclasses/{masterclassId} {
+      allow read: if true;
+      allow create: if request.auth != null;
+      allow update, delete: if request.auth != null && request.auth.uid == resource.data.instructorId;
+    }
+    
+    // SoundWave Tutorials Collection
+    match /soundwave_tutorials/{tutorialId} {
+      allow read: if true;
+      allow create: if request.auth != null;
+      allow update, delete: if request.auth != null && request.auth.uid == resource.data.instructorId;
+    }
+    
+    // SoundWave Sample Packs Collection
+    match /soundwave_sample_packs/{packId} {
+      allow read: if true;
+      allow create: if request.auth != null;
+      allow update, delete: if request.auth != null && request.auth.uid == resource.data.creatorId;
+    }
+    
+    // SoundWave Global Events Collection
+    match /soundwave_global_events/{eventId} {
+      allow read: if true;
+      allow create: if request.auth != null;
+      allow update, delete: if request.auth != null && request.auth.uid == resource.data.authorId;
+    }
+    
+    // Private user data (messages, purchases, etc.)
+    match /soundwave_private/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+      
+      match /messages/{messageId} {
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+      }
+      
+      match /purchases/{purchaseId} {
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+      }
+    }
+  }
+}
