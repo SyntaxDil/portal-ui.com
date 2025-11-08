@@ -142,9 +142,17 @@ export default function App() {
   const [currentStage, setCurrentStage] = useState<StageType>('mainStage');
   const [viewMode, setViewMode] = useState<'single' | 'multi'>('single');
   
-  // Block selection for merging
-  const [selectionMode, setSelectionMode] = useState(false);
-  const [selectedSlots, setSelectedSlots] = useState<number[]>([]);
+  // Block selection for merging (per-stage)
+  const [selectionMode, setSelectionMode] = useState<Record<StageType, boolean>>({
+    mainStage: false,
+    dubPub: false,
+    technoHub: false
+  });
+  const [selectedSlots, setSelectedSlots] = useState<Record<StageType, number[]>>({
+    mainStage: [],
+    dubPub: [],
+    technoHub: []
+  });
 
   // --- Firebase Initialization and Auth ---
   useEffect(() => {
@@ -539,62 +547,67 @@ export default function App() {
   };
 
   // --- Block Selection and Merging ---
-  const handleToggleSelectionMode = () => {
-    setSelectionMode(!selectionMode);
-    setSelectedSlots([]);
+  const handleToggleSelectionMode = (stage: StageType) => {
+    setSelectionMode(prev => ({ ...prev, [stage]: !prev[stage] }));
+    setSelectedSlots(prev => ({ ...prev, [stage]: [] }));
   };
 
-  const handleSlotSelection = (index: number) => {
-    if (!selectionMode) return;
+  const handleSlotSelection = (index: number, stage: StageType) => {
+    if (!selectionMode[stage]) return;
     
-    if (selectedSlots.includes(index)) {
-      setSelectedSlots(selectedSlots.filter(i => i !== index));
+    const stageSlots = selectedSlots[stage];
+    if (stageSlots.includes(index)) {
+      setSelectedSlots(prev => ({ ...prev, [stage]: stageSlots.filter(i => i !== index) }));
     } else {
-      setSelectedSlots([...selectedSlots, index].sort((a, b) => a - b));
+      setSelectedSlots(prev => ({ ...prev, [stage]: [...stageSlots, index].sort((a, b) => a - b) }));
     }
   };
 
-  const handleMergeSlots = async () => {
-    if (selectedSlots.length < 2) {
+  const handleMergeSlots = async (stage: StageType) => {
+    const stageSlots = selectedSlots[stage];
+    if (stageSlots.length < 2) {
       alert('Please select at least 2 adjacent slots to merge.');
       return;
     }
 
     // Check if slots are adjacent
-    for (let i = 0; i < selectedSlots.length - 1; i++) {
-      if (selectedSlots[i + 1] !== selectedSlots[i] + 1) {
+    for (let i = 0; i < stageSlots.length - 1; i++) {
+      if (stageSlots[i + 1] !== stageSlots[i] + 1) {
         alert('Please select adjacent slots only.');
         return;
       }
     }
 
-    const currentSchedule = getCurrentSchedule();
-    if (!currentSchedule) return;
+    const targetSchedule = stage === 'mainStage' ? schedule : 
+                          stage === 'dubPub' ? dubPubSchedule : 
+                          technoHubSchedule;
+    if (!targetSchedule) return;
 
     setIsLoading(true);
     try {
-      const newTimeSlots = [...currentSchedule.timeSlots];
-      const startIndex = selectedSlots[0];
+      const newTimeSlots = [...targetSchedule.timeSlots];
+      const startIndex = stageSlots[0];
       
       // Mark the first slot as merged start
       newTimeSlots[startIndex] = {
         ...newTimeSlots[startIndex],
         isMergedStart: true,
-        mergedCount: selectedSlots.length
+        mergedCount: stageSlots.length
       };
 
       // Mark continuation slots
-      for (let i = 1; i < selectedSlots.length; i++) {
-        const slotIndex = selectedSlots[i];
+      for (let i = 1; i < stageSlots.length; i++) {
+        const slotIndex = stageSlots[i];
         newTimeSlots[slotIndex] = {
           ...newTimeSlots[slotIndex],
           mergedWith: startIndex
         };
       }
 
-      await updateSchedule(newTimeSlots);
-      setSelectedSlots([]);
-      setSelectionMode(false);
+      const scheduleRef = doc(db!, `${sharedMode ? `apps/${appId}` : `users/${userId}/apps/${appId}`}/schedule/${stage}`);
+      await updateDoc(scheduleRef, { timeSlots: newTimeSlots });
+      setSelectedSlots(prev => ({ ...prev, [stage]: [] }));
+      setSelectionMode(prev => ({ ...prev, [stage]: false }));
     } catch (err) {
       console.error('Error merging slots:', err);
       setError('Failed to merge slots.');
@@ -603,13 +616,15 @@ export default function App() {
     }
   };
 
-  const handleUnmergeSlot = async (index: number) => {
-    const currentSchedule = getCurrentSchedule();
-    if (!currentSchedule) return;
+  const handleUnmergeSlot = async (index: number, stage: StageType) => {
+    const targetSchedule = stage === 'mainStage' ? schedule : 
+                          stage === 'dubPub' ? dubPubSchedule : 
+                          technoHubSchedule;
+    if (!targetSchedule) return;
 
     setIsLoading(true);
     try {
-      const newTimeSlots = [...currentSchedule.timeSlots];
+      const newTimeSlots = [...targetSchedule.timeSlots];
       const slot = newTimeSlots[index];
 
       if (slot.isMergedStart && slot.mergedCount) {
@@ -634,7 +649,8 @@ export default function App() {
         }
       }
 
-      await updateSchedule(newTimeSlots);
+      const scheduleRef = doc(db!, `${sharedMode ? `apps/${appId}` : `users/${userId}/apps/${appId}`}/schedule/${stage}`);
+      await updateDoc(scheduleRef, { timeSlots: newTimeSlots });
     } catch (err) {
       console.error('Error unmerging slot:', err);
       setError('Failed to unmerge slot.');
@@ -962,12 +978,12 @@ export default function App() {
                   disabled={isLoading}
                   activeRange={rangeStart !== null ? { start: Math.min(rangeStart, rangeEnd ?? rangeStart), end: Math.max(rangeStart, rangeEnd ?? rangeStart) } : null}
                   onReset={() => handleResetSchedule('mainStage')}
-                  selectionMode={selectionMode}
-                  selectedSlots={selectedSlots}
-                  onSlotClick={handleSlotSelection}
-                  onToggleSelectionMode={handleToggleSelectionMode}
-                  onMergeSlots={handleMergeSlots}
-                  onUnmerge={handleUnmergeSlot}
+                  selectionMode={selectionMode['mainStage']}
+                  selectedSlots={selectedSlots['mainStage']}
+                  onSlotClick={(index) => handleSlotSelection(index, 'mainStage')}
+                  onToggleSelectionMode={() => handleToggleSelectionMode('mainStage')}
+                  onMergeSlots={() => handleMergeSlots('mainStage')}
+                  onUnmerge={(index) => handleUnmergeSlot(index, 'mainStage')}
                   onNameUpdate={(name) => updateScheduleName('mainStage', name)}
                   stage="mainStage"
                   onClearGuests={handleClearGuests}
@@ -988,12 +1004,12 @@ export default function App() {
                   disabled={isLoading}
                   activeRange={rangeStart !== null ? { start: Math.min(rangeStart, rangeEnd ?? rangeStart), end: Math.max(rangeStart, rangeEnd ?? rangeStart) } : null}
                   onReset={() => handleResetSchedule('dubPub')}
-                  selectionMode={selectionMode}
-                  selectedSlots={selectedSlots}
-                  onSlotClick={handleSlotSelection}
-                  onToggleSelectionMode={handleToggleSelectionMode}
-                  onMergeSlots={handleMergeSlots}
-                  onUnmerge={handleUnmergeSlot}
+                  selectionMode={selectionMode['dubPub']}
+                  selectedSlots={selectedSlots['dubPub']}
+                  onSlotClick={(index) => handleSlotSelection(index, 'dubPub')}
+                  onToggleSelectionMode={() => handleToggleSelectionMode('dubPub')}
+                  onMergeSlots={() => handleMergeSlots('dubPub')}
+                  onUnmerge={(index) => handleUnmergeSlot(index, 'dubPub')}
                   onNameUpdate={(name) => updateScheduleName('dubPub', name)}
                   stage="dubPub"
                   onClearGuests={handleClearGuests}
@@ -1014,12 +1030,12 @@ export default function App() {
                   disabled={isLoading}
                   activeRange={rangeStart !== null ? { start: Math.min(rangeStart, rangeEnd ?? rangeStart), end: Math.max(rangeStart, rangeEnd ?? rangeStart) } : null}
                   onReset={() => handleResetSchedule('technoHub')}
-                  selectionMode={selectionMode}
-                  selectedSlots={selectedSlots}
-                  onSlotClick={handleSlotSelection}
-                  onToggleSelectionMode={handleToggleSelectionMode}
-                  onMergeSlots={handleMergeSlots}
-                  onUnmerge={handleUnmergeSlot}
+                  selectionMode={selectionMode['technoHub']}
+                  selectedSlots={selectedSlots['technoHub']}
+                  onSlotClick={(index) => handleSlotSelection(index, 'technoHub')}
+                  onToggleSelectionMode={() => handleToggleSelectionMode('technoHub')}
+                  onMergeSlots={() => handleMergeSlots('technoHub')}
+                  onUnmerge={(index) => handleUnmergeSlot(index, 'technoHub')}
                   onNameUpdate={(name) => updateScheduleName('technoHub', name)}
                   stage="technoHub"
                   onClearGuests={handleClearGuests}
@@ -1040,13 +1056,13 @@ export default function App() {
               isDropZoneActive={dragCounter > 0}
               disabled={isLoading}
               activeRange={rangeStart !== null ? { start: Math.min(rangeStart, rangeEnd ?? rangeStart), end: Math.max(rangeStart, rangeEnd ?? rangeStart) } : null}
-              onReset={handleResetSchedule}
-              selectionMode={selectionMode}
-              selectedSlots={selectedSlots}
-              onSlotClick={handleSlotSelection}
-              onToggleSelectionMode={handleToggleSelectionMode}
-              onMergeSlots={handleMergeSlots}
-              onUnmerge={handleUnmergeSlot}
+              onReset={() => handleResetSchedule(currentStage)}
+              selectionMode={selectionMode[currentStage]}
+              selectedSlots={selectedSlots[currentStage]}
+              onSlotClick={(index) => handleSlotSelection(index, currentStage)}
+              onToggleSelectionMode={() => handleToggleSelectionMode(currentStage)}
+              onMergeSlots={() => handleMergeSlots(currentStage)}
+              onUnmerge={(index) => handleUnmergeSlot(index, currentStage)}
               onNameUpdate={(name) => updateScheduleName(currentStage, name)}
               stage={currentStage}
               onClearGuests={handleClearGuests}
