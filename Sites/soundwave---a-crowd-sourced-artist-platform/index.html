@@ -5,8 +5,31 @@
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>SoundWave - A Crowd Sourced Artist Platform</title>
-    <!-- Load Firebase Config from Portal -->
-    <script src="/js/firebase-config.js"></script>
+    <!-- Load Firebase Config from Portal (relative path for GitHub Pages) -->
+    <script src="../../js/firebase-config.js"></script>
+    <script>
+      // Verify Firebase config loaded
+      window.addEventListener('DOMContentLoaded', () => {
+        if (window.FIREBASE_CONFIG) {
+          console.log('✅ Firebase config loaded:', window.FIREBASE_CONFIG.projectId);
+        } else {
+          console.error('❌ Firebase config NOT loaded - check path');
+        }
+      });
+    </script>
+      window.addEventListener('DOMContentLoaded', () => {
+        if (!window.FIREBASE_CONFIG) {
+          console.error('Firebase config not loaded! Trying to fetch from parent...');
+          // Try loading from a relative path as backup
+          const script = document.createElement('script');
+          script.src = '../../js/firebase-config.js';
+          script.onerror = () => console.error('Failed to load Firebase config from relative path');
+          document.head.appendChild(script);
+        } else {
+          console.log('Firebase config loaded successfully');
+        }
+      });
+    </script>
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
       tailwind.config = {
@@ -298,10 +321,13 @@
   }
 }
 </script>
-<link rel="stylesheet" href="/index.css">
+  }
+}
+</script>
 </head>
   <body class="bg-gray-900 text-gray-300">
     <div id="root"></div>
     <script type="module" src="/index.tsx"></script>
   </body>
 </html>
+```
