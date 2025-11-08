@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { Label, Track, User, Post, LabelEvent, Opportunity, LabelTheme, Comment } from '../types';
 import { getLabelById, getTracksByLabelId, getArtistsByLabelId, getPostsByLabelId, getEventsByLabelId, addCommentToTrack, addCommentToLabel } from '../services/firebaseService';
-import { generateLabelTheme } from '../services/geminiService';
 import Spinner from '../components/Spinner';
 import Button from '../components/Button';
 import TrackCard from '../components/TrackCard';
@@ -63,18 +62,21 @@ const LabelPage: React.FC = () => {
     fetchData();
   }, [labelId]);
 
-  const handleGenerateTheme = async () => {
+  const handleGenerateTheme = () => {
     if (!label) return;
     setIsGeneratingTheme(true);
-    try {
-        const newTheme = await generateLabelTheme(label.name, label.bio);
-        setTheme(newTheme);
-    } catch (error) {
-        console.error("AI theme generation failed:", error);
-        alert("Sorry, we couldn't generate a new theme right now.");
-    } finally {
-        setIsGeneratingTheme(false);
-    }
+    
+    // Predefined theme options
+    const themes: LabelTheme[] = [
+      { bannerUrl: 'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=1200', primaryColor: '#8B5CF6', secondaryColor: '#EC4899' },
+      { bannerUrl: 'https://images.unsplash.com/photo-1511379938547-c1f69419868d?w=1200', primaryColor: '#3B82F6', secondaryColor: '#10B981' },
+      { bannerUrl: 'https://images.unsplash.com/photo-1514320291840-2e0a9bf2a9ae?w=1200', primaryColor: '#F59E0B', secondaryColor: '#EF4444' },
+    ];
+    
+    // Randomly select a theme
+    const randomTheme = themes[Math.floor(Math.random() * themes.length)];
+    setTheme(randomTheme);
+    setIsGeneratingTheme(false);
   };
   
   const handleAddTrackComment = async (commentData: Omit<Comment, 'id' | 'createdAt'>) => {
@@ -243,7 +245,7 @@ const LabelPage: React.FC = () => {
           </div>
           <div className="flex items-center gap-2 flex-shrink-0">
              <Button onClick={() => alert('Contact form coming soon!')} variant="secondary">Contact</Button>
-             <Button onClick={handleGenerateTheme} isLoading={isGeneratingTheme} variant="secondary">Generate Theme</Button>
+             <Button onClick={handleGenerateTheme} variant="secondary">Change Theme</Button>
              <Button>Follow Label</Button>
           </div>
         </div>

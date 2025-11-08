@@ -29,9 +29,15 @@ const LabelsPage: React.FC = () => {
       <p className="text-gray-400 mb-8">Discover the labels shaping the sound of the community.</p>
       
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-        {labels.map(label => (
-          <LabelCard key={label.id} label={label} />
-        ))}
+        {(labels || []).length > 0 ? (
+          labels.map(label => (
+            <LabelCard key={label.id} label={label} />
+          ))
+        ) : (
+          <div className="col-span-full text-center py-12">
+            <p className="text-gray-400 text-lg">No labels found. Check back later!</p>
+          </div>
+        )}
       </div>
     </div>
   );

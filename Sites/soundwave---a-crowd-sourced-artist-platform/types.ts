@@ -9,6 +9,15 @@ export interface User {
   name: string;
   avatarUrl: string;
   bio: string;
+  genre?: string;
+  location?: string;
+  spotifyUrl?: string;
+  soundcloudUrl?: string;
+  instagramUrl?: string;
+  twitterUrl?: string;
+  followers?: number;
+  following?: number;
+  isVerified?: boolean;
   // For Artist Focus View
   interview?: {
     question: string;

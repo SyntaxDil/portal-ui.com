@@ -20,27 +20,58 @@ import ImportCollectionPage from './pages/ImportPlaylistPage';
 import LabelsPage from './pages/LabelsPage';
 import LabelPage from './pages/LabelPage';
 import InboxPage from './pages/InboxPage';
-import { auth, initializeSoundWaveUser } from './services/firebaseService';
-import { onAuthStateChanged, User } from 'firebase/auth';
+import { auth, initializeSoundWaveUser, getUserById } from './services/firebaseService';
+import { onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
+import { User as SoundWaveUser } from './types';
+import ArtistOnboarding from './components/ArtistOnboarding';
 
 function App(): React.ReactNode {
-  const [user, setUser] = useState<User | null>(null);
+  console.log('🎵 App component rendering...');
+  const [user, setUser] = useState<FirebaseUser | null>(null);
+  const [soundWaveUser, setSoundWaveUser] = useState<SoundWaveUser | null>(null);
   const [loading, setLoading] = useState(true);
+  const [needsOnboarding, setNeedsOnboarding] = useState(false);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      setUser(user);
-      if (user) {
-        try {
-          await initializeSoundWaveUser();
-        } catch (error) {
-          console.error('Error initializing SoundWave user:', error);
+    console.log('🔐 Setting up auth listener...');
+    
+    // Use real Firebase auth
+    try {
+      const unsubscribe = onAuthStateChanged(auth, async (user) => {
+        console.log('👤 Auth state changed:', user ? 'User logged in' : 'No user');
+        setUser(user);
+        
+        if (user) {
+          try {
+            console.log('🔧 Checking for SoundWave profile...');
+            
+            // Check if user has SoundWave profile
+            const swUser = await getUserById(user.uid);
+            
+            if (swUser) {
+              console.log('✅ SoundWave profile found:', swUser);
+              setSoundWaveUser(swUser);
+              setNeedsOnboarding(false);
+            } else {
+              console.log('⚠️ No SoundWave profile - showing onboarding');
+              setNeedsOnboarding(true);
+            }
+          } catch (error) {
+            console.error('❌ Error checking profile:', error);
+            // If error checking profile, assume new user needs onboarding
+            setNeedsOnboarding(true);
+          }
         }
-      }
-      setLoading(false);
-    });
+        
+        setLoading(false);
+        console.log('✅ Loading complete');
+      });
 
-    return () => unsubscribe();
+      return () => unsubscribe();
+    } catch (error) {
+      console.error('❌ Error setting up auth:', error);
+      setLoading(false);
+    }
   }, []);
 
   if (loading) {
@@ -48,6 +79,21 @@ function App(): React.ReactNode {
       <div className="flex items-center justify-center min-h-screen bg-gray-900">
         <div className="text-white text-xl">Loading SoundWave...</div>
       </div>
+    );
+  }
+
+  // Show onboarding if user needs to create profile
+  if (user && needsOnboarding) {
+    return (
+      <ArtistOnboarding
+        currentUserId={user.uid}
+        currentUserEmail={user.email || ''}
+        onComplete={(newUser) => {
+          console.log('✅ Onboarding complete:', newUser);
+          setSoundWaveUser(newUser);
+          setNeedsOnboarding(false);
+        }}
+      />
     );
   }
 

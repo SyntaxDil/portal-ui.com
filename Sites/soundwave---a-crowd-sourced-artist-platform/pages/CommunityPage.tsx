@@ -34,9 +34,15 @@ const CommunityPage: React.FC = () => {
 
       {loading ? <Spinner /> : (
         <div className="space-y-6">
-          {posts.map(post => (
-            <PostCard key={post.id} post={post} />
-          ))}
+          {(posts || []).length > 0 ? (
+            posts.map(post => (
+              <PostCard key={post.id} post={post} />
+            ))
+          ) : (
+            <div className="text-center py-12">
+              <p className="text-gray-400 text-lg">No posts yet. Be the first to share something!</p>
+            </div>
+          )}
         </div>
       )}
     </div>

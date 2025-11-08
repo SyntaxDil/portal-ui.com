@@ -12,7 +12,8 @@ import {
   getDocs, 
   getDoc, 
   addDoc, 
-  updateDoc, 
+  updateDoc,
+  setDoc,
   deleteDoc, 
   query, 
   where, 
@@ -91,7 +92,8 @@ export const db = getFirestore(app);
 export const storage = getStorage(app);
 
 // Connect to emulators in development
-if (import.meta.env.DEV || window.location.hostname === 'localhost') {
+const isDev = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+if (isDev) {
   try {
     // Connect to emulators if running locally
     connectAuthEmulator(auth, 'http://localhost:9099', { disableWarnings: true });
@@ -172,33 +174,61 @@ export const getUsers = async (): Promise<User[]> => {
 
 export const getUserById = async (id: string): Promise<User | undefined> => {
   try {
+    // Try Firebase first
     const docSnap = await getDoc(doc(db, COLLECTIONS.USERS, id));
     if (docSnap.exists()) {
+      console.log('✅ User retrieved from Firestore:', id);
       return { id: docSnap.id, ...docSnap.data() } as User;
     }
     return undefined;
   } catch (error) {
-    handleFirestoreError(error, 'Get user');
+    console.error('Firestore Get user error:', error);
+    // Fallback to localStorage in case of error
+    const stored = localStorage.getItem(`soundwave_user_${id}`);
+    if (stored) {
+      console.log('📦 Fallback: Retrieved user from localStorage:', id);
+      return JSON.parse(stored) as User;
+    }
     return undefined;
   }
 };
 
-export const createOrUpdateUser = async (user: Partial<User>): Promise<User> => {
+export const createOrUpdateUser = async (userData: Partial<User>): Promise<User> => {
   try {
-    const currentUser = await requireAuth();
-    const userId = currentUser.uid;
+    console.log('📝 Creating/updating user:', userData);
     
-    const userData = {
-      ...user,
+    // Use the provided ID or get current user
+    const userId = userData.id || (await getCurrentUser())?.uid;
+    if (!userId) {
+      throw new Error('No user ID available');
+    }
+    
+    const userDoc = {
+      ...userData,
       id: userId,
-      updatedAt: serverTimestamp()
+      updatedAt: new Date().toISOString()
     };
     
-    await updateDoc(doc(db, COLLECTIONS.USERS, userId), userData);
-    return userData as User;
+    // Try Firebase first
+    await setDoc(doc(db, COLLECTIONS.USERS, userId), userDoc, { merge: true });
+    console.log('✅ User saved to Firestore');
+    
+    // Also save to localStorage as backup
+    localStorage.setItem(`soundwave_user_${userId}`, JSON.stringify(userDoc));
+    
+    return userDoc as User;
   } catch (error) {
-    handleFirestoreError(error, 'Create/update user');
-    throw error;
+    console.error('❌ Error creating/updating user:', error);
+    // Fallback to localStorage only
+    const userId = userData.id || 'unknown';
+    const userDoc = {
+      ...userData,
+      id: userId,
+      updatedAt: new Date().toISOString()
+    };
+    localStorage.setItem(`soundwave_user_${userId}`, JSON.stringify(userDoc));
+    console.log('✅ Fallback: User saved to localStorage');
+    return userDoc as User;
   }
 };
 
@@ -302,12 +332,24 @@ export const createPost = async (post: Omit<Post, 'id' | 'createdAt' | 'likes' |
     };
     
     const docRef = await addDoc(collection(db, COLLECTIONS.POSTS), postData);
-    return { id: docRef.id, ...postData } as Post;
+    // Return with ISO string timestamp for client-side use
+    return { 
+      id: docRef.id, 
+      ...post,
+      authorId: currentUser.uid,
+      createdAt: new Date().toISOString(),
+      likes: 0,
+      replyCount: 0,
+      replies: []
+    } as Post;
   } catch (error) {
     handleFirestoreError(error, 'Create post');
     throw error;
   }
 };
+
+// Alias for createPost (some components use addPost)
+export const addPost = createPost;
 
 // Comment functions
 export const addComment = async (
@@ -348,16 +390,25 @@ export const addComment = async (
 // File upload utilities
 export const uploadFile = async (file: File, path: string): Promise<string> => {
   try {
-    await requireAuth();
-    
+    // Try Firebase Storage first
     const storageRef = ref(storage, path);
     const snapshot = await uploadBytes(storageRef, file);
     const downloadURL = await getDownloadURL(snapshot.ref);
-    
+    console.log('✅ File uploaded to Firebase Storage');
     return downloadURL;
   } catch (error) {
-    handleFirestoreError(error, 'Upload file');
-    throw error;
+    console.error('Upload file error:', error);
+    // Fallback to base64 data URL
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const dataUrl = reader.result as string;
+        console.log('✅ Fallback: File converted to data URL');
+        resolve(dataUrl);
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
   }
 };
 
@@ -398,6 +449,128 @@ export const getLabelById = async (id: string): Promise<Label | undefined> => {
     handleFirestoreError(error, 'Get label');
     return undefined;
   }
+};
+
+export const getTracksByLabelId = async (labelId: string): Promise<Track[]> => {
+  try {
+    const q = query(
+      collection(db, COLLECTIONS.TRACKS),
+      where('labelId', '==', labelId),
+      orderBy('createdAt', 'desc')
+    );
+    const querySnapshot = await getDocs(q);
+    return querySnapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    })) as Track[];
+  } catch (error) {
+    handleFirestoreError(error, 'Get tracks by label');
+    return [];
+  }
+};
+
+export const getArtistsByLabelId = async (labelId: string): Promise<User[]> => {
+  try {
+    const q = query(
+      collection(db, COLLECTIONS.USERS),
+      where('labelId', '==', labelId)
+    );
+    const querySnapshot = await getDocs(q);
+    return querySnapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    })) as User[];
+  } catch (error) {
+    handleFirestoreError(error, 'Get artists by label');
+    return [];
+  }
+};
+
+export const getPostsByLabelId = async (labelId: string): Promise<Post[]> => {
+  try {
+    const q = query(
+      collection(db, COLLECTIONS.POSTS),
+      where('labelId', '==', labelId),
+      orderBy('createdAt', 'desc')
+    );
+    const querySnapshot = await getDocs(q);
+    return querySnapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    })) as Post[];
+  } catch (error) {
+    handleFirestoreError(error, 'Get posts by label');
+    return [];
+  }
+};
+
+export const getEventsByLabelId = async (labelId: string): Promise<any[]> => {
+  try {
+    // Events are typically stored in label document or separate collection
+    // For now, return empty array - can be implemented based on data structure
+    return [];
+  } catch (error) {
+    handleFirestoreError(error, 'Get events by label');
+    return [];
+  }
+};
+
+export const addCommentToTrack = async (trackId: string, commentData: Omit<Comment, 'id' | 'createdAt'>): Promise<Comment> => {
+  return addComment('track', trackId, commentData.content);
+};
+
+export const addCommentToLabel = async (labelId: string, commentData: Omit<Comment, 'id' | 'createdAt'>): Promise<Comment> => {
+  return addComment('label', labelId, commentData.content);
+};
+
+export const addReplyToPost = async (postId: string, commentData: Omit<Comment, 'id' | 'createdAt'>): Promise<Comment> => {
+  return addComment('post', postId, commentData.content);
+};
+
+export const addCommentToMasterclass = async (masterclassId: string, commentData: Omit<Comment, 'id' | 'createdAt'>): Promise<Comment> => {
+  return addComment('masterclass', masterclassId, commentData.content);
+};
+
+export const addCommentToSamplePack = async (packId: string, commentData: Omit<Comment, 'id' | 'createdAt'>): Promise<Comment> => {
+  return addComment('post', packId, commentData.content); // Using 'post' as fallback
+};
+
+export const addCommentToOpportunity = async (opportunityId: string, commentData: Omit<Comment, 'id' | 'createdAt'>): Promise<Comment> => {
+  return addComment('post', opportunityId, commentData.content); // Using 'post' as fallback
+};
+
+export const addCommentToTutorial = async (tutorialId: string, commentData: Omit<Comment, 'id' | 'createdAt'>): Promise<Comment> => {
+  return addComment('post', tutorialId, commentData.content); // Using 'post' as fallback
+};
+
+export const addCommentToGlobalEvent = async (eventId: string, commentData: Omit<Comment, 'id' | 'createdAt'>): Promise<Comment> => {
+  return addComment('post', eventId, commentData.content); // Using 'post' as fallback
+};
+
+// Stub functions for features not yet implemented
+export const getLiveRooms = async (): Promise<any[]> => {
+  console.log('getLiveRooms: Not yet implemented');
+  return [];
+};
+
+export const getConversations = async (userId: string): Promise<any[]> => {
+  console.log('getConversations: Not yet implemented for user', userId);
+  return [];
+};
+
+export const getSampleChatMessages = async (): Promise<any[]> => {
+  console.log('getSampleChatMessages: Not yet implemented');
+  return [];
+};
+
+export const getExternalReleasesByArtist = async (artistId: string): Promise<any[]> => {
+  console.log('getExternalReleasesByArtist: Not yet implemented');
+  return [];
+};
+
+export const getPremiumPacksByArtist = async (artistId: string): Promise<any[]> => {
+  console.log('getPremiumPacksByArtist: Not yet implemented');
+  return [];
 };
 
 // Global Events

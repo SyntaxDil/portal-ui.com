@@ -29,15 +29,11 @@ const PlaylistsPage: React.FC = () => {
     useEffect(() => {
         const fetchData = async () => {
             setLoading(true);
-            const [fetchedStations, fetchedTracks, fetchedPlaylists] = await Promise.all([
-                getRadioStations(), 
-                getTracks(),
-                getCommunityPlaylists()
-            ]);
-            setStations(fetchedStations);
+            const fetchedTracks = await getTracks();
+            // Radio stations and playlists not yet implemented
+            setStations([]);
             setAllTracks(fetchedTracks);
-            // Hardcoded user ID for "My Playlists" section
-            setMyPlaylists(fetchedPlaylists.filter(p => p.curator.id === 'user_1'));
+            setMyPlaylists([]);
             setLoading(false);
         };
         fetchData();
@@ -64,11 +60,19 @@ const PlaylistsPage: React.FC = () => {
     }, [selectedStation, setOnTrackEnd, handleNextTrack]);
 
 
-    const generateCommentary = async (track: Track) => {
+    const generateCommentary = (track: Track) => {
         setIsGeneratingCommentary(true);
         setDjCommentary('');
-        const commentary = await generateAIDJCommentary(track.title, track.artistName);
-        setDjCommentary(commentary);
+        // Simple commentary without AI
+        const commentaries = [
+            `This is fire! ${track.title} is bringing the heat!`,
+            `Loving the vibes on ${track.title} by ${track.artistName}!`,
+            `${track.artistName} never disappoints with tracks like ${track.title}!`,
+            `Turn it up! ${track.title} is a certified banger!`,
+            `Smooth sounds from ${track.artistName} - ${track.title} hits different!`
+        ];
+        const randomCommentary = commentaries[Math.floor(Math.random() * commentaries.length)];
+        setDjCommentary(randomCommentary);
         setIsGeneratingCommentary(false);
     };
 
@@ -96,14 +100,8 @@ const PlaylistsPage: React.FC = () => {
 
     const handleAddComment = async (commentData: Omit<Comment, 'id' | 'createdAt'>) => {
         if (!commentModalTarget) return;
-        try {
-            const newComment = await addCommentToPlaylist(commentModalTarget.id, commentData);
-            const updatedTarget = { ...commentModalTarget, comments: [...(commentModalTarget.comments || []), newComment] };
-            setCommentModalTarget(updatedTarget);
-            setMyPlaylists(prev => prev.map(p => p.id === updatedTarget.id ? updatedTarget : p));
-        } catch (error) {
-            console.error("Failed to add comment to playlist:", error);
-        }
+        // Comment functionality for playlists not yet implemented
+        console.log('Add comment to playlist:', commentData);
     };
 
     const nowPlayingTrack = stationPlaylist[currentTrackIndex];
@@ -240,7 +238,7 @@ const RadioPlayerView: React.FC<{
                         <div className="flex items-start gap-3">
                             <img src={`https://i.pravatar.cc/150?u=dj_gemini`} alt="DJ Gemini" className="w-10 h-10 rounded-full object-cover flex-shrink-0" />
                             <div>
-                                <p className="font-bold text-brand-accent">DJ Gemini</p>
+                                <p className="font-bold text-brand-accent">SoundWave Radio</p>
                                 {isGeneratingCommentary ? (
                                     <div className="flex items-center space-x-2 text-gray-400">
                                         <div className="w-2 h-2 bg-gray-400 rounded-full animate-pulse [animation-delay:-0.3s]"></div>

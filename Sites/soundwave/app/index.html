@@ -5,22 +5,34 @@
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>SoundWave - A Crowd Sourced Artist Platform</title>
-    <!-- Load Firebase Config from Portal (relative path for GitHub Pages) -->
-    <script src="../../js/firebase-config.js"></script>
+    <!-- Load Firebase Config -->
     <script>
-      // Verify Firebase config loaded
-      window.addEventListener('DOMContentLoaded', () => {
-        if (window.FIREBASE_CONFIG) {
-          console.log('✅ Firebase config loaded:', window.FIREBASE_CONFIG.projectId);
+      // Try to load Firebase config from portal (production) or local (development)
+      (function() {
+        const isDev = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+        
+        if (isDev) {
+          // Development: load from public folder
+          const script = document.createElement('script');
+          script.src = '/firebase-config.js';
+          script.onload = () => console.log('✅ Firebase config loaded (dev):', window.FIREBASE_CONFIG?.projectId);
+          script.onerror = () => console.error('❌ Failed to load Firebase config');
+          document.head.appendChild(script);
         } else {
-          console.error('❌ Firebase config NOT loaded - check path');
-          // Try loading from a relative path as backup
+          // Production: load from parent portal
           const script = document.createElement('script');
           script.src = '../../js/firebase-config.js';
-          script.onerror = () => console.error('Failed to load Firebase config from relative path');
+          script.onload = () => console.log('✅ Firebase config loaded (prod):', window.FIREBASE_CONFIG?.projectId);
+          script.onerror = () => {
+            console.error('❌ Failed to load Firebase config from portal');
+            // Fallback to local
+            const fallback = document.createElement('script');
+            fallback.src = '/firebase-config.js';
+            document.head.appendChild(fallback);
+          };
           document.head.appendChild(script);
         }
-      });
+      })();
     </script>
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
@@ -303,9 +315,6 @@
       }
     </style>
 
-  }
-}
-</script>
   <script type="importmap">
 {
   "imports": {
@@ -317,10 +326,17 @@
   }
 }
 </script>
-  <script type="module" crossorigin src="/Sites/soundwave/app/assets/index-BcNA240t.js"></script>
+  <script type="module" crossorigin src="/Sites/soundwave/app/assets/index-BGML0cff.js"></script>
 </head>
   <body class="bg-gray-900 text-gray-300">
-    <div id="root"></div>
+    <div id="root">
+      <!-- Fallback content while React loads -->
+      <div style="display: flex; align-items: center; justify-content: center; min-height: 100vh; color: white; font-size: 24px;">
+        <div>
+          <p>🎵 Loading SoundWave...</p>
+          <p style="font-size: 14px; color: #888; margin-top: 10px;">If this message persists, check the browser console (F12)</p>
+        </div>
+      </div>
+    </div>
   </body>
 </html>
-```

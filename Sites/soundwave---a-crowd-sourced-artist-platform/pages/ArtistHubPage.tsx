@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useContext, useMemo } from 'react';
 import { QueuedTrack, LiveRoom, Track, CommunityPlaylist, Comment } from '../types';
-import { getLiveRooms, getTracks, getCommunityPlaylists, addCommentToTrack } from '../services/firebaseService';
+import { getTracks, getPlaylists, addCommentToTrack } from '../services/firebaseService';
 import { AudioContext } from '../context/AudioContext';
 import Spinner from '../components/Spinner';
 import Button from '../components/Button';
@@ -103,12 +103,11 @@ const ArtistHubPage: React.FC = () => {
     useEffect(() => {
         const fetchData = async () => {
             setLoading(true);
-            const [fetchedRooms, fetchedTracks, fetchedPlaylists] = await Promise.all([
-                getLiveRooms(),
+            const [fetchedTracks, fetchedPlaylists] = await Promise.all([
                 getTracks(),
-                getCommunityPlaylists()
+                getPlaylists()
             ]);
-            setLiveRooms(fetchedRooms);
+            setLiveRooms([]); // Live rooms not yet implemented
             setAllTracks(fetchedTracks);
             setCommunityPlaylists(fetchedPlaylists);
 
