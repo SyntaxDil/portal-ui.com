@@ -1,8 +1,7 @@
 
 import React, { useState, useEffect, useContext } from 'react';
 import { RadioStation, Track } from '../types';
-import { getRadioStations, getTracks } from '../services/firebaseService';
-import { generateAIDJCommentary } from '../services/geminiService';
+import { getTracks } from '../services/firebaseService';
 import { AudioContext } from '../context/AudioContext';
 import Spinner from '../components/Spinner';
 import Button from '../components/Button';
@@ -16,7 +15,6 @@ const CuratedPlaylistsPage: React.FC = () => {
     const [stationPlaylist, setStationPlaylist] = useState<Track[]>([]);
     const [currentTrackIndex, setCurrentTrackIndex] = useState(0);
     const [djCommentary, setDjCommentary] = useState('');
-    const [isGeneratingCommentary, setIsGeneratingCommentary] = useState(false);
 
     const audioCtx = useContext(AudioContext);
      if (!audioCtx) {
@@ -27,8 +25,10 @@ const CuratedPlaylistsPage: React.FC = () => {
     useEffect(() => {
         const fetchData = async () => {
             setLoading(true);
-            const [fetchedStations, fetchedTracks] = await Promise.all([getRadioStations(), getTracks()]);
-            setStations(fetchedStations);
+            // Radio stations not yet implemented in Firebase - using empty array
+            const fetchedTracks = await getTracks();
+            setStations([]); // TODO: Implement getRadioStations() in firebaseService
+            setAllTracks(fetchedTracks);
             setAllTracks(fetchedTracks);
             setLoading(false);
         };
@@ -48,11 +48,8 @@ const CuratedPlaylistsPage: React.FC = () => {
 
 
     const generateCommentary = async (track: Track) => {
-        setIsGeneratingCommentary(true);
-        setDjCommentary('');
-        const commentary = await generateAIDJCommentary(track.title, track.artistName);
-        setDjCommentary(commentary);
-        setIsGeneratingCommentary(false);
+        // Removed AI commentary - could add predefined messages here
+        setDjCommentary(`Now playing: ${track.title} by ${track.artistName}`);
     };
 
     const handleTuneIn = (station: RadioStation) => {
@@ -122,18 +119,10 @@ const CuratedPlaylistsPage: React.FC = () => {
         <div className="bg-gray-700/50 backdrop-blur-sm border border-gray-600 rounded-lg p-4 mt-6 relative">
              <div className="absolute -top-3 left-8 w-6 h-6 bg-gray-700/50 border-t border-l border-gray-600 transform rotate-45" style={{clipPath: 'polygon(0 0, 100% 0, 100% 100%)'}} />
             <div className="flex items-start gap-3">
-                <img src={`https://i.pravatar.cc/150?u=dj_gemini`} alt="DJ Gemini" className="w-10 h-10 rounded-full object-cover flex-shrink-0" />
+                <img src="https://api.dicebear.com/7.x/shapes/svg?seed=soundwave" alt="SoundWave Radio" className="w-10 h-10 rounded-full object-cover flex-shrink-0" />
                 <div>
-                     <p className="font-bold text-brand-accent">DJ Gemini</p>
-                    {isGeneratingCommentary ? (
-                        <div className="flex items-center space-x-2 text-gray-400">
-                             <div className="w-2 h-2 bg-gray-400 rounded-full animate-pulse [animation-delay:-0.3s]"></div>
-                             <div className="w-2 h-2 bg-gray-400 rounded-full animate-pulse [animation-delay:-0.15s]"></div>
-                             <div className="w-2 h-2 bg-gray-400 rounded-full animate-pulse"></div>
-                        </div>
-                    ) : (
-                        <p className="text-gray-300 italic">"{djCommentary}"</p>
-                    )}
+                     <p className="font-bold text-brand-accent">SoundWave Radio</p>
+                     <p className="text-gray-300 italic">"{djCommentary}"</p>
                 </div>
             </div>
         </div>

@@ -419,6 +419,130 @@ export const getGlobalEvents = async (): Promise<GlobalEvent[]> => {
   }
 };
 
+// Masterclasses
+export const getMasterclasses = async (): Promise<any[]> => {
+  try {
+    const q = query(
+      collection(db, COLLECTIONS.MASTERCLASSES),
+      orderBy('createdAt', 'desc')
+    );
+    const querySnapshot = await getDocs(q);
+    return querySnapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    }));
+  } catch (error) {
+    handleFirestoreError(error, 'Get masterclasses');
+    return [];
+  }
+};
+
+export const getMasterclassById = async (id: string): Promise<any | undefined> => {
+  try {
+    const docSnap = await getDoc(doc(db, COLLECTIONS.MASTERCLASSES, id));
+    if (docSnap.exists()) {
+      return { id: docSnap.id, ...docSnap.data() };
+    }
+    return undefined;
+  } catch (error) {
+    handleFirestoreError(error, 'Get masterclass');
+    return undefined;
+  }
+};
+
+// Tutorials
+export const getTutorials = async (): Promise<any[]> => {
+  try {
+    const q = query(
+      collection(db, COLLECTIONS.TUTORIALS),
+      orderBy('createdAt', 'desc')
+    );
+    const querySnapshot = await getDocs(q);
+    return querySnapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    }));
+  } catch (error) {
+    handleFirestoreError(error, 'Get tutorials');
+    return [];
+  }
+};
+
+export const getTutorialById = async (id: string): Promise<any | undefined> => {
+  try {
+    const docSnap = await getDoc(doc(db, COLLECTIONS.TUTORIALS, id));
+    if (docSnap.exists()) {
+      return { id: docSnap.id, ...docSnap.data() };
+    }
+    return undefined;
+  } catch (error) {
+    handleFirestoreError(error, 'Get tutorial');
+    return undefined;
+  }
+};
+
+// Sample Packs
+export const getSamplePacks = async (): Promise<any[]> => {
+  try {
+    const q = query(
+      collection(db, COLLECTIONS.SAMPLE_PACKS),
+      orderBy('createdAt', 'desc')
+    );
+    const querySnapshot = await getDocs(q);
+    return querySnapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    }));
+  } catch (error) {
+    handleFirestoreError(error, 'Get sample packs');
+    return [];
+  }
+};
+
+export const getSamplePackById = async (id: string): Promise<any | undefined> => {
+  try {
+    const docSnap = await getDoc(doc(db, COLLECTIONS.SAMPLE_PACKS, id));
+    if (docSnap.exists()) {
+      return { id: docSnap.id, ...docSnap.data() };
+    }
+    return undefined;
+  } catch (error) {
+    handleFirestoreError(error, 'Get sample pack');
+    return undefined;
+  }
+};
+
+// Playlists
+export const getPlaylists = async (): Promise<any[]> => {
+  try {
+    const q = query(
+      collection(db, COLLECTIONS.PLAYLISTS),
+      orderBy('createdAt', 'desc')
+    );
+    const querySnapshot = await getDocs(q);
+    return querySnapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    }));
+  } catch (error) {
+    handleFirestoreError(error, 'Get playlists');
+    return [];
+  }
+};
+
+export const getPlaylistById = async (id: string): Promise<any | undefined> => {
+  try {
+    const docSnap = await getDoc(doc(db, COLLECTIONS.PLAYLISTS, id));
+    if (docSnap.exists()) {
+      return { id: docSnap.id, ...docSnap.data() };
+    }
+    return undefined;
+  } catch (error) {
+    handleFirestoreError(error, 'Get playlist');
+    return undefined;
+  }
+};
+
 // Initialize user profile when first accessing SoundWave
 export const initializeSoundWaveUser = async (): Promise<void> => {
   try {
@@ -440,21 +564,5 @@ export const initializeSoundWaveUser = async (): Promise<void> => {
   } catch (error) {
     console.error('Error initializing SoundWave user:', error);
     // Don't throw - allow user to continue even if profile creation fails
-  }
-};
-
-// Export for backward compatibility with existing mock data imports
-export * from './mockData';
-
-// Development seed data function
-export const seedDevelopmentData = async (): Promise<void> => {
-  if (!import.meta.env.DEV) return;
-  
-  try {
-    console.log('Seeding development data...');
-    // Import and seed some mock data for development
-    // This could be implemented to populate Firestore with sample data
-  } catch (error) {
-    console.error('Error seeding development data:', error);
   }
 };

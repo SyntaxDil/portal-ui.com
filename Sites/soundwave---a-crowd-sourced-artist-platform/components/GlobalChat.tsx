@@ -2,17 +2,15 @@
 import React from 'react';
 import { Icon } from './Icon';
 import { ChatMessage, User } from '../types';
-import { getUsers } from '../services/firebaseService';
-import { generateChatResponse } from '../services/geminiService';
+import { getUsers, getCurrentUser } from '../services/firebaseService';
 
 const GlobalChat: React.FC = () => {
     const [isOpen, setIsOpen] = React.useState(false);
     const [messages, setMessages] = React.useState<ChatMessage[]>([]);
     const [newMessage, setNewMessage] = React.useState('');
-    const [isThinking, setIsThinking] = React.useState(false);
+    const [currentUser, setCurrentUser] = React.useState<User | null>(null);
 
     const messagesEndRef = React.useRef<HTMLDivElement>(null);
-    const currentUser: User = { id: 'user_1', name: 'Sub-Tropical', avatarUrl: 'https://picsum.photos/id/1015/200/200', bio: '' };
 
     const scrollToBottom = () => {
         messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -20,13 +18,29 @@ const GlobalChat: React.FC = () => {
 
     React.useEffect(scrollToBottom, [messages]);
     
+    // Load current user
+    React.useEffect(() => {
+        const loadUser = async () => {
+            const authUser = await getCurrentUser();
+            if (authUser) {
+                setCurrentUser({
+                    id: authUser.uid,
+                    name: authUser.displayName || 'Anonymous',
+                    avatarUrl: authUser.photoURL || 'https://api.dicebear.com/7.x/avataaars/svg?seed=default',
+                    bio: ''
+                });
+            }
+        };
+        loadUser();
+    }, []);
+    
     // Initialize chat with a welcome message
     React.useEffect(() => {
         setMessages([
             {
                 id: `msg_${Date.now()}`,
-                user: { id: 'dj_gemini', name: 'DJ Gemini', avatarUrl: `https://i.pravatar.cc/150?u=dj_gemini` },
-                text: 'Welcome to the SoundWave global chat! Feel free to talk about music, production, or just say hi.',
+                user: { id: 'system', name: 'SoundWave', avatarUrl: 'https://api.dicebear.com/7.x/shapes/svg?seed=soundwave' },
+                text: 'Welcome to the SoundWave global chat! Connect with artists, producers, and music lovers.',
                 timestamp: new Date().toISOString()
             }
         ]);
@@ -34,7 +48,7 @@ const GlobalChat: React.FC = () => {
 
     const handleSendMessage = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!newMessage.trim()) return;
+        if (!newMessage.trim() || !currentUser) return;
 
         const userMessage: ChatMessage = {
             id: `msg_${Date.now()}`,
@@ -49,20 +63,9 @@ const GlobalChat: React.FC = () => {
 
         setMessages(prev => [...prev, userMessage]);
         setNewMessage('');
-        setIsThinking(true);
-
-        // Simulate AI response
-        setTimeout(async () => {
-            const aiResponseText = await generateChatResponse(newMessage);
-            const aiMessage: ChatMessage = {
-                id: `msg_${Date.now() + 1}`,
-                 user: { id: 'dj_gemini', name: 'DJ Gemini', avatarUrl: `https://i.pravatar.cc/150?u=dj_gemini` },
-                text: aiResponseText,
-                timestamp: new Date().toISOString(),
-            };
-            setMessages(prev => [...prev, aiMessage]);
-            setIsThinking(false);
-        }, 1000 + Math.random() * 1000); // Realistic delay
+        
+        // In a real app, this would send to Firestore and use real-time listeners
+        // For now, just display the message locally
     };
 
     return (
@@ -95,20 +98,12 @@ const GlobalChat: React.FC = () => {
                             {messages.map(msg => (
                                 <div key={msg.id} className={`flex items-start gap-3 ${msg.user.id === currentUser.id ? 'flex-row-reverse' : ''}`}>
                                     <img src={msg.user.avatarUrl} alt={msg.user.name} className="w-8 h-8 rounded-full object-cover" />
-                                    <div className={`p-3 rounded-lg max-w-xs ${msg.user.id === currentUser.id ? 'bg-brand-accent text-white' : 'bg-gray-700 text-gray-300'}`}>
+                                    <div className={`p-3 rounded-lg max-w-xs ${msg.user.id === currentUser?.id ? 'bg-brand-accent text-white' : 'bg-gray-700 text-gray-300'}`}>
                                         <p className="font-bold text-sm">{msg.user.name}</p>
                                         <p className="text-sm">{msg.text}</p>
                                     </div>
                                 </div>
                             ))}
-                            {isThinking && (
-                                <div className="flex items-start gap-3">
-                                    <img src={`https://i.pravatar.cc/150?u=dj_gemini`} alt="DJ Gemini" className="w-8 h-8 rounded-full object-cover" />
-                                    <div className="p-3 rounded-lg max-w-xs bg-gray-700 text-gray-400">
-                                        <p className="text-sm italic">DJ Gemini is typing...</p>
-                                    </div>
-                                </div>
-                            )}
                             <div ref={messagesEndRef} />
                         </div>
                     </div>
@@ -122,9 +117,8 @@ const GlobalChat: React.FC = () => {
                                 onChange={(e) => setNewMessage(e.target.value)}
                                 placeholder="Type a message..."
                                 className="flex-grow bg-gray-600 border border-gray-500 rounded-full py-2 px-4 focus:ring-brand-accent focus:border-brand-accent transition text-white placeholder-gray-400"
-                                disabled={isThinking}
                             />
-                            <button type="submit" className="bg-brand-accent text-white rounded-full p-3 hover:bg-brand-accent-hover disabled:bg-gray-500" disabled={isThinking || !newMessage.trim()}>
+                            <button type="submit" className="bg-brand-accent text-white rounded-full p-3 hover:bg-brand-accent-hover disabled:bg-gray-500" disabled={!newMessage.trim()}>
                                 <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-8.707l-3-3a1 1 0 00-1.414 1.414L10.586 9H7a1 1 0 100 2h3.586l-1.293 1.293a1 1 0 101.414 1.414l3-3a1 1 0 000-1.414z" clipRule="evenodd" /></svg>
                             </button>
                         </form>

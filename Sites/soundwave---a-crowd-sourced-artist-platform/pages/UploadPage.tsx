@@ -2,7 +2,6 @@
 import React, { useState } from 'react';
 import Button from '../components/Button';
 import { Icon } from '../components/Icon';
-import { generateTrackDescription } from '../services/geminiService';
 import { UploadType } from '../types';
 
 const UploadPage: React.FC = () => {
@@ -11,24 +10,8 @@ const UploadPage: React.FC = () => {
   const [uploadType, setUploadType] = useState<UploadType>(UploadType.PREVIEW);
   const [price, setPrice] = useState(0.99);
   const [tags, setTags] = useState('');
-  const [aiPrompt, setAiPrompt] = useState('');
-  const [isGenerating, setIsGenerating] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadSuccess, setUploadSuccess] = useState(false);
-
-  const handleGenerateDescription = async () => {
-    if (!aiPrompt) return;
-    setIsGenerating(true);
-    try {
-      const generatedDesc = await generateTrackDescription(aiPrompt);
-      setDescription(generatedDesc);
-    } catch (error) {
-      console.error("Failed to generate description:", error);
-      // You could set an error message in state here
-    } finally {
-      setIsGenerating(false);
-    }
-  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -69,17 +52,7 @@ const UploadPage: React.FC = () => {
           </div>
           <div className="mt-6">
             <label htmlFor="description" className="block text-sm font-medium text-gray-400 mb-2">Description</label>
-            <textarea id="description" value={description} onChange={e => setDescription(e.target.value)} rows={4} required className="w-full bg-gray-700 border border-gray-600 rounded-md py-2 px-4 focus:ring-brand-accent focus:border-brand-accent transition"></textarea>
-            
-            <div className="mt-4 p-4 bg-gray-700/50 rounded-lg">
-              <label htmlFor="ai-prompt" className="block text-sm font-medium text-gray-400 mb-2">Need help with the description? Give the AI some keywords.</label>
-              <div className="flex space-x-2">
-                <input type="text" id="ai-prompt" value={aiPrompt} onChange={e => setAiPrompt(e.target.value)} placeholder="e.g. epic, cinematic, synthwave" className="flex-grow bg-gray-700 border border-gray-600 rounded-md py-2 px-4 focus:ring-brand-accent focus:border-brand-accent transition" />
-                <Button type="button" onClick={handleGenerateDescription} isLoading={isGenerating} variant="secondary">
-                  Generate
-                </Button>
-              </div>
-            </div>
+            <textarea id="description" value={description} onChange={e => setDescription(e.target.value)} rows={6} required placeholder="Describe your track, the vibe, the inspiration..." className="w-full bg-gray-700 border border-gray-600 rounded-md py-2 px-4 focus:ring-brand-accent focus:border-brand-accent transition"></textarea>
           </div>
 
           <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-6">

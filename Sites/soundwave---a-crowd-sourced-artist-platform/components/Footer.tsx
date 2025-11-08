@@ -6,7 +6,7 @@ const Footer: React.FC = () => {
     <footer className="bg-gray-800 border-t border-gray-700 mt-auto">
       <div className="container mx-auto py-4 px-4 sm:px-6 lg:px-8">
         <p className="text-center text-sm text-gray-400">
-          &copy; {new Date().getFullYear()} SoundWave. All rights reserved. A React & Gemini Showcase.
+          &copy; {new Date().getFullYear()} SoundWave. All rights reserved. A crowd-sourced artist platform.
         </p>
       </div>
     </footer>
