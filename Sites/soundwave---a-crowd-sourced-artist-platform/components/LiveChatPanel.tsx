@@ -97,9 +97,9 @@ const LiveChatPanel: React.FC = () => {
             <div className="flex-grow p-4 overflow-y-auto">
                 <div className="space-y-4">
                     {messages.map(msg => (
-                        <div key={msg.id} className={`flex items-start gap-3 ${msg.user.id === currentUser.id ? 'flex-row-reverse' : ''}`}>
+                        <div key={msg.id} className={`flex items-start gap-3 ${msg.user.id === currentUser?.id ? 'flex-row-reverse' : ''}`}>
                             <img src={msg.user.avatarUrl} alt={msg.user.name} className="w-10 h-10 rounded-full object-cover" />
-                            <div className={`p-3 rounded-lg max-w-sm shadow ${msg.user.id === currentUser.id ? 'bg-brand-accent text-white' : 'bg-gray-700 text-gray-300'}`}>
+                            <div className={`p-3 rounded-lg max-w-sm shadow ${msg.user.id === currentUser?.id ? 'bg-brand-accent text-white' : 'bg-gray-700 text-gray-300'}`}>
                                 <p className="font-bold text-sm mb-1">{msg.user.name}</p>
                                 <p className="text-sm">{msg.text}</p>
                             </div>
