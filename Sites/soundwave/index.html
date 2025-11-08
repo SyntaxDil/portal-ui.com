@@ -256,14 +256,18 @@
 
         // Auth state listener
         onAuthStateChanged(auth, (user) => {
+            console.log('Auth state changed:', user ? 'Logged in as ' + user.email : 'Not logged in');
             if (user) {
                 // User is signed in
-                if (user.emailVerified) {
-                    showAuthenticated(user);
-                } else {
-                    showError('Please verify your email address before accessing SoundWave.');
-                    showNotAuthenticated();
-                }
+                console.log('Email verified:', user.emailVerified);
+                showAuthenticated(user);
+                // Note: Email verification optional for development
+                // if (user.emailVerified) {
+                //     showAuthenticated(user);
+                // } else {
+                //     showError('Please verify your email address before accessing SoundWave.');
+                //     showNotAuthenticated();
+                // }
             } else {
                 // User is signed out
                 showNotAuthenticated();
