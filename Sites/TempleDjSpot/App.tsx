@@ -478,13 +478,22 @@ export default function App() {
       if (sourceData.from === 'slot') {
          // --- Dragging from SLOT to UNASSIGN ---
          const sourceSlotIndex = sourceData.slotIndex as number;
-         const newTimeSlots = [...(schedule as Schedule).timeSlots];
+         const sourceStage = sourceData.stage || currentStage; // Use stage from drag data or fallback to currentStage
+         
+         // Get the correct schedule
+         const targetSchedule = sourceStage === 'mainStage' ? schedule : 
+                               sourceStage === 'dubPub' ? dubPubSchedule : 
+                               technoHubSchedule;
+         
+         if (!targetSchedule) return;
+         
+         const newTimeSlots = [...targetSchedule.timeSlots];
          
          // Clear the slot
          newTimeSlots[sourceSlotIndex] = { ...newTimeSlots[sourceSlotIndex], djId: null, djName: null };
          
-         // Update Firestore
-         const scheduleRef = doc(db!, `${sharedMode ? `apps/${appId}` : `users/${userId}/apps/${appId}`}/schedule/mainStage`);
+         // Update Firestore with correct stage path
+         const scheduleRef = doc(db!, `${sharedMode ? `apps/${appId}` : `users/${userId}/apps/${appId}`}/schedule/${sourceStage}`);
          await updateDoc(scheduleRef, { timeSlots: newTimeSlots });
       }
       // If dragging from pool, do nothing
@@ -497,12 +506,19 @@ export default function App() {
     }
   };
 
-  const handleResetSchedule = async () => {
+  const handleResetSchedule = async (stageToReset?: StageType) => {
     if (!window.confirm('Clear all slot assignments and return all DJs to the unassigned pool?')) return;
     setIsLoading(true);
     try {
-      const scheduleRef = doc(db!, `${sharedMode ? `apps/${appId}` : `users/${userId}/apps/${appId}`}/schedule/mainStage`);
-      const newTimeSlots = (schedule as Schedule).timeSlots.map(slot => ({
+      const stagePath = stageToReset || currentStage;
+      const targetSchedule = stagePath === 'mainStage' ? schedule : 
+                            stagePath === 'dubPub' ? dubPubSchedule : 
+                            technoHubSchedule;
+      
+      if (!targetSchedule) return;
+      
+      const scheduleRef = doc(db!, `${sharedMode ? `apps/${appId}` : `users/${userId}/apps/${appId}`}/schedule/${stagePath}`);
+      const newTimeSlots = targetSchedule.timeSlots.map(slot => ({
         time: slot.time,
         djId: null,
         djName: null
@@ -945,7 +961,7 @@ export default function App() {
                   isDropZoneActive={dragCounter > 0}
                   disabled={isLoading}
                   activeRange={rangeStart !== null ? { start: Math.min(rangeStart, rangeEnd ?? rangeStart), end: Math.max(rangeStart, rangeEnd ?? rangeStart) } : null}
-                  onReset={handleResetSchedule}
+                  onReset={() => handleResetSchedule('mainStage')}
                   selectionMode={selectionMode}
                   selectedSlots={selectedSlots}
                   onSlotClick={handleSlotSelection}
@@ -971,7 +987,7 @@ export default function App() {
                   isDropZoneActive={dragCounter > 0}
                   disabled={isLoading}
                   activeRange={rangeStart !== null ? { start: Math.min(rangeStart, rangeEnd ?? rangeStart), end: Math.max(rangeStart, rangeEnd ?? rangeStart) } : null}
-                  onReset={handleResetSchedule}
+                  onReset={() => handleResetSchedule('dubPub')}
                   selectionMode={selectionMode}
                   selectedSlots={selectedSlots}
                   onSlotClick={handleSlotSelection}
@@ -997,7 +1013,7 @@ export default function App() {
                   isDropZoneActive={dragCounter > 0}
                   disabled={isLoading}
                   activeRange={rangeStart !== null ? { start: Math.min(rangeStart, rangeEnd ?? rangeStart), end: Math.max(rangeStart, rangeEnd ?? rangeStart) } : null}
-                  onReset={handleResetSchedule}
+                  onReset={() => handleResetSchedule('technoHub')}
                   selectionMode={selectionMode}
                   selectedSlots={selectedSlots}
                   onSlotClick={handleSlotSelection}
@@ -1964,14 +1980,14 @@ function TimeSlot({ slot, slotIndex, allDjs, onDjClick, onDragStart, onDragOver,
                 {/* Left resize handle */}
                 <div
                   draggable={!disabled}
-                  onDragStart={(e) => onDragStart(e, { from: 'resize', direction: 'left', slotIndex, djId: dj.id, djName: dj.djName })}
+                  onDragStart={(e) => onDragStart(e, { from: 'resize', direction: 'left', slotIndex, djId: dj.id, djName: dj.djName, stage })}
                   title="Extend earlier"
                   className="absolute left-0 top-1/2 -translate-y-1/2 w-2 h-8 bg-blue-500/60 hover:bg-blue-500 rounded-sm cursor-ew-resize z-10"
                 />
                 {/* Right resize handle */}
                 <div
                   draggable={!disabled}
-                  onDragStart={(e) => onDragStart(e, { from: 'resize', direction: 'right', slotIndex, djId: dj.id, djName: dj.djName })}
+                  onDragStart={(e) => onDragStart(e, { from: 'resize', direction: 'right', slotIndex, djId: dj.id, djName: dj.djName, stage })}
                   title="Extend later"
                   className="absolute right-0 top-1/2 -translate-y-1/2 w-2 h-8 bg-blue-500/60 hover:bg-blue-500 rounded-sm cursor-ew-resize z-10"
                 />
@@ -1981,7 +1997,7 @@ function TimeSlot({ slot, slotIndex, allDjs, onDjClick, onDragStart, onDragOver,
               dj={dj}
               onClick={() => onDjClick(dj)}
               isDraggable={!disabled && !selectionMode}
-              onDragStart={(e) => onDragStart(e, { from: 'slot', slotIndex, djId: dj.id, djName: dj.djName })}
+              onDragStart={(e) => onDragStart(e, { from: 'slot', slotIndex, djId: dj.id, djName: dj.djName, stage })}
             />
           </div>
         ) : (
